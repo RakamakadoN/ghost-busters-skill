@@ -1,0 +1,71 @@
+# Adapting Ghost Busters to your project
+
+The algorithm and the class catalogue are universal. Five things are yours.
+Fill them in once, keep them next to the skill (a `project.md` in the skill
+folder, or your `CLAUDE.md` / `AGENTS.md`), and the hunt stops asking.
+
+## 1. Canonical source per statement type
+
+Ghosts hide in the gap between "what the code says" and "what the data says".
+Decide once which source answers which question, and never let one source
+answer another's question.
+
+| Statement type | Canonical source | Yours |
+|---|---|---|
+| deployed / runtime / data state | production database, hosting platform | |
+| current merged implementation | main branch | |
+| "was it ever committed or exposed" | reachable git history, remote refs | |
+| scope, acceptance, remaining work | issue tracker | |
+| architectural and business invariants | rules / ADRs / specs | |
+| rationale, decisions, investigation context | project notes / decision log | |
+| past incidents, root causes, rejected hypotheses | engineering memory (vector store, postmortems) | |
+
+A source that physically cannot answer a type of question does not take part
+in resolving a discrepancy of that type.
+
+## 2. Home predicates
+
+List the places that define a business concept. New code copies them; it
+never re-derives them.
+
+| Concept | Home | Yours |
+|---|---|---|
+| "this invoice is still collectible" | `isCollectible` / status list | |
+| "this request is a sale" | the purpose predicate | |
+| "same phone number" | the phone normaliser | |
+| "duplicate client" | id **and** address | |
+| "this business, from this date" | start-date constant | |
+
+## 3. Pipelines and their watchdogs
+
+Every pipeline that moves money or stock. For each: who writes, how often, and
+which signal fires when it stops. "None" is an answer, and a ticket.
+
+| Pipeline | Writer | Cadence | Freshness probe | Alarm channel |
+|---|---|---|---|---|
+| upstream payments → invoices | cron job N | twice daily | `max(created_at)` vs upstream | none → ticket |
+| spreadsheet → orders | serverless fn | every 30 min | sync log last 5 | none → ticket |
+
+## 4. Axes and windows
+
+Name every way your system distinguishes businesses, contours, brands or
+tenants, and whether any of them is inverted for historical reasons. Name the
+start date of each business. A figure without its axis and window is not a figure.
+
+## 5. Memory tools
+
+Name the tool and the queries. The skill's phase 1 expects 3–4 semantic queries
+before the first hypothesis. If you have no memory store yet, start one: a
+folder of postmortems with a consistent header (symptom, root cause,
+resolution, rejected hypotheses, future guidance) is enough for grep.
+
+## Stack notes
+
+- **Supabase / PostgREST**: class 3 (row cap 1000, order without a unique
+  tiebreaker), class 11 (`create function` grants `PUBLIC EXECUTE`; `anon`
+  `using (true)` policies pass the advisor; views need `security_invoker`),
+  class 5 (migrations via the SQL editor leave no history row).
+- **Other Postgres APIs** (Hasura, Prisma, Django): keep the classes, replace
+  the probes' object names; the row cap is your API's page size.
+- **Non-Postgres**: classes 1, 2, 4, 6, 7, 8, 9, 10, 12 apply unchanged; rewrite
+  `probes.sql` for your store.
