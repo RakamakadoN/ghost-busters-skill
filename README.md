@@ -60,7 +60,7 @@ RAID          after one catch, sweep for siblings of the same class with paralle
 Copy the folder into your project's skills directory:
 
 ```bash
-git clone https://github.com/<you>/ghost-busters-skill .claude/skills/ghost-busters
+git clone https://github.com/RakamakadoN/ghost-busters-skill .claude/skills/ghost-busters
 ```
 
 Then fill in `CUSTOMIZE.md` (canonical sources, home predicates, pipelines
