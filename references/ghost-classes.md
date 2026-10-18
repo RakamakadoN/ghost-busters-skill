@@ -63,22 +63,42 @@ because the browser `update` hit 0 rows under RLS. Six HR screens showed
 duplicate; a screen says "unavailable" after data growth.
 
 **Where it lives.** The API's default row cap (PostgREST `max-rows = 1000`):
-a query without a range is truncated silently. Paging with `order by` on a
-non-unique column: Postgres does not guarantee the order of equal keys between
-`LIMIT/OFFSET` requests, so a boundary row is read twice or lost. Heavy views
-read live hit the role's `statement_timeout`; `ALTER FUNCTION SET` does not
-re-arm a running statement.
+a query without a range is truncated silently. **`.limit(N)` with N above the
+cap is a false ceiling**: the API still returns the cap (`.limit(50000)` on
+1 361 rows returned 1 000). Paging with `order by` on a non-unique column:
+Postgres does not guarantee the order of equal keys between `LIMIT/OFFSET`
+requests, so a boundary row is read twice or lost; a business number is not
+unique, the tiebreaker is the primary key. Heavy views read live hit the
+role's `statement_timeout`; `ALTER FUNCTION SET` does not re-arm a running
+statement.
 
-**First probe.** `count(*)` of the table vs rows on screen;
-`pg_stat_user_tables.n_live_tup` near the cap; logs for "statement timeout".
+**First probe.** `count(*)` of the table vs rows on screen, under the widest
+role (under a manager's RLS the set looks small; the executive's same screen
+is truncated); `pg_stat_user_tables.n_live_tup` is a planner estimate,
+confirm the threshold with `count(*)`; growth from inserts over the last 7
+days; logs for "statement timeout".
+
+**Raid signature.** Scan every `.from(` chain in the frontend: no range and
+no limit / with limit / paged; group by table; volumes from the catalogue
+probe plus `count(*)`. The first live raid: 916 chains, 280 unpaged reads over
+181 tables, 4 screens truncating now, 4 on the threshold, 3 PRs the same day.
 
 **Trap.** A fake API client with a fixture larger than the cap and a group of
-equal keys on the page boundary; a unique key last in every `ORDER BY`; new
-screens over heavy views read a nightly snapshot.
+equal keys on the page boundary (the fake must apply `.limit()` capped at
+max-rows); a unique key last in every `ORDER BY`; new screens over heavy views
+read a nightly snapshot. Watchdog for the class: a CI test that fails on
+`.from(<table with ≥ 500 rows>)…select` without a range and on `.limit(N > cap)`,
+the table whitelist refreshed from the volume probe.
+
+**Before the exorcism.** A removed truncation exposes hidden rows to the
+screen's bulk actions: the reminders queue would have gained 682 drafts, 402
+of them false payment demands. Count what the hidden rows will do first.
 
 **Precedent.** Four money screens in a row: a KPI read 1 000 of 1 055 invoices;
 an import "already loaded" check forgot keys beyond 1 000 and offered old rows
-again; daily receipts paged by a non-unique date.
+again; daily receipts paged by a non-unique date. The raid: a sales agent's
+summary over 1 000 of 1 498 orders, analytics with `.limit(50000)`, demand
+lines for planning, a reminders queue.
 
 ---
 

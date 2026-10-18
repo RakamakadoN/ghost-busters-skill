@@ -86,6 +86,13 @@ an agent with and without the skill, read-only, same tool budget.
 
 The full example is in `references/hunt-report.md`.
 
+The first live raid (class 3, row-cap truncation) ran the day the skill
+landed: 916 query chains scanned, 4 screens found truncating in production
+right now, 4 more on the threshold, 3 fixes merged the same day with
+RED→GREEN paging tests. It also produced the "what the fix will open" rule:
+one of the four fixes was held because un-truncating the screen would have
+fed 402 false payment demands into a bulk send.
+
 ## Adapting
 
 The protocol and classes are stack-agnostic. `probes.sql` is written for

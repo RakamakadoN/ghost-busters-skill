@@ -2,7 +2,7 @@
 name: ghost-busters
 description: Use when a number, screen, task feed, sync, cron job or report in a CRM/ERP looks wrong or suspiciously quiet — "the total doesn't match the accounting system", "the screen shows 0", "tasks are firing for no reason", "the sync is silent", "tests are green but the page is broken", "nothing arrived", a regression after a fix, any silent failure — and before proposing any fix. Also use for a proactive sweep ("raid") of a module for known ghost classes.
 metadata:
-  version: 1.0.0
+  version: 1.1.0
   origin: distilled from ~60 production incidents in a React + Supabase CRM/ERP
 ---
 
@@ -130,6 +130,12 @@ Three report lines before editing:
    verify the deployed version separately.
 3. **Where the guarantee lives** — a data or permission invariant is held by
    the database (trigger, lock, policy), not by the client and not by an edge function.
+4. **What the fix will open** — removing a truncation, a filter or a gate
+   widens the set of rows and the actions over them. If the screen has a
+   bulk action, first count what the hidden rows would do. In the first live
+   raid, un-truncating a reminders queue would have exposed 682 more drafts,
+   402 of them false payment demands; the fix was held until the stale drafts
+   were dismissed. A class-3 ghost wakes a class-4 ghost.
 
 Copy the home predicate; never invent a new one (see `CUSTOMIZE.md`, "Home predicates").
 
@@ -164,6 +170,26 @@ is confirmed:
 
 A raid may be postponed but never lost: if there is no time, the RAID line holds
 the signature and a next step in the tracker, not "didn't run".
+
+**Raid report** — not a hunt report, but one ticket per class with five
+buckets (format proven by the first live raid):
+
+```
+A. CUTS NOW      file:line · object · production volume (count(*)) · what is distorted
+B. ON THRESHOLD  same + threshold date from inserts over the last 7 days, not an average
+C. LATENT        signature present, volume small — file it, don't fix it yet
+D. WATCH         full reads of small tables, with growth rate
+E. OFF-CLASS     found along the way (another class) — separate ticket
++ TRAP, one per class (the reference test) · NEXT STEP "one screen, one PR"
++ WATCHDOG for the class · DO NOT REPEAT
+```
+
+Threshold dates in B come from actual inserts over the last 7 days: an
+average "+17/day" turned out to be zero because the upstream pipeline had
+stopped — a stalled class-1 pipeline disguises itself as "the table isn't
+growing". Volumes are `count(*)` under the widest role: under a manager's
+row-level security "the portfolio is small", under the executive the same
+table is truncated.
 
 ## Which agent for which class
 
@@ -207,6 +233,8 @@ RECORD      ticket <id> · project state · memory <type>
 | "Hypothesis is obvious, test afterwards" | Trap before the fix, or there is no proof the fix works |
 | "It's the only path, I remember" | Memory describes the past. Grep finds the second writer |
 | "Raid later, no time" | Then the report holds the signature and a next step; "later" without them never comes |
+| "It has `.limit(5000)`, so the ceiling is 5000" | The API sets the ceiling: any limit above the row cap is the row cap, silently |
+| "The fix only widens the selection, it's safe" | The widened selection feeds the screen's bulk actions. Count the hidden rows first |
 
 ## Red flags
 

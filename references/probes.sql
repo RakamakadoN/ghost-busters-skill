@@ -64,13 +64,22 @@ select c.relname, c.relrowsecurity, c.relforcerowsecurity
 -- ──────────────────────────────────────────────────────────────────────────
 -- 3.1 Tables at or near the API row cap (PostgREST default 1000):
 --     every screen reading them without a range is truncated silently.
+--     n_live_tup is a planner ESTIMATE; confirm the threshold with count(*) (3.2).
+--     .limit(N) with N above the cap does not raise it — the API returns the cap.
 select relname, n_live_tup
   from pg_stat_user_tables
- where schemaname = 'public' and n_live_tup >= 800
+ where schemaname = 'public' and n_live_tup >= 500
  order by n_live_tup desc;
 
--- 3.2 Exact count of one table vs rows on screen.
+-- 3.2 Exact count of one table vs rows on screen. Count under the widest
+--     role: under a manager's RLS the set is small, the executive's is truncated.
 select count(*) from public.<table>;
+
+-- 3.4 Growth over the last 7 days — predicts the threshold date. Zero inserts
+--     means the pipeline is stalled (class 1), not "the table isn't growing".
+select count(*) filter (where created_at >= now() - interval '7 days') as last_7d,
+       count(*) as total
+  from public.<table>;
 
 -- 3.3 Role timeouts (PostgREST sessions inherit the role's statement_timeout).
 select rolname, rolconfig
