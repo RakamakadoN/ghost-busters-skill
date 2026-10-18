@@ -163,33 +163,46 @@ One instance of a class is almost never alone: a row-cap truncation turned up
 in four money screens in a row; a check-then-act race in two. After the class
 is confirmed:
 
-1. Write a search signature (grep pattern, SQL over the catalogue, view name).
-2. Dispatch parallel read-only agents, one per class or per area, each with the
-   class probes and a no-edit constraint.
-3. File siblings as separate tickets labelled with the class.
+1. Write a search signature: an AST scan, SQL over the catalogue, a view name.
+   Grep does not work on multi-line query chains (broken by `as` casts and
+   queries assembled in parts); for supabase-js reads use
+   `references/scan-unbounded-reads.cjs`.
+2. Parallel read-only agents only when the class signature cannot be
+   expressed as a script or SQL. The first live raid mapped the whole class
+   with one AST scan and one probe in about ten calls; agents would have cost more.
+3. File siblings as one ticket per class, one PR per screen.
 
 A raid may be postponed but never lost: if there is no time, the RAID line holds
 the signature and a next step in the tracker, not "didn't run".
 
-**Raid report** — not a hunt report, but one ticket per class with five
-buckets (format proven by the first live raid):
+**Raid report** — not a hunt report. Twelve findings share one class, one
+trap and one watchdog; each finding's trail is trivial, what matters is "who
+else reads this table". Format proven by the first live raid:
 
 ```
-A. CUTS NOW      file:line · object · production volume (count(*)) · what is distorted
-B. ON THRESHOLD  same + threshold date from inserts over the last 7 days, not an average
-C. LATENT        signature present, volume small — file it, don't fix it yet
-D. WATCH         full reads of small tables, with growth rate
-E. OFF-CLASS     found along the way (another class) — separate ticket
-+ TRAP, one per class (the reference test) · NEXT STEP "one screen, one PR"
-+ WATCHDOG for the class · DO NOT REPEAT
+GHOST       <class> · search signature (script / SQL) · area
+ARCHIVE     as in a hunt
+INSTRUMENTS class probes, timestamp UTC, which role the volumes were taken under
+TABLE       file:line → table/view → count(*) → growth/month → ORDER BY (key unique?) → risk → readers
+            risk: A cuts now · B threshold ≤ 5 weeks · C latent (signature present, volume small)
+                  D watch · E off-class (another class — separate ticket)
+ORDER       of fixing: live screens before experimental ones; one screen, one PR
+WATCHDOG    one per class: the standard one from the catalogue, or a proposal
+RECORD      one ticket per class + one PR per screen; TRAP and EXORCISM live in each PR
 ```
 
-Threshold dates in B come from actual inserts over the last 7 days: an
-average "+17/day" turned out to be zero because the upstream pipeline had
-stopped — a stalled class-1 pipeline disguises itself as "the table isn't
-growing". Volumes are `count(*)` under the widest role: under a manager's
+"On threshold" (B): rows ≥ 800 **or** rows + 30-day growth ≥ 1000. Take
+growth from `created_at`, but zero inserts in the last 7 days means "the
+pipeline is stalled" (class 1), not "the table isn't growing": a forecast of
+"+17/day → three days" turned out to be zero because the upstream pipeline had
+stopped. Volumes are `count(*)` under the widest role: under a manager's
 row-level security "the portfolio is small", under the executive the same
 table is truncated.
+
+A raid's PRs merge one at a time: the next one only after merging main into
+its branch and a green required check on the new head. Shared files (the fake
+client, a helper) go in one commit in the first PR; the others take them by
+merge. Two PRs each patching the fake "a little" collided in the first raid.
 
 ## Which agent for which class
 

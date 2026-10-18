@@ -72,23 +72,34 @@ unique, the tiebreaker is the primary key. Heavy views read live hit the
 role's `statement_timeout`; `ALTER FUNCTION SET` does not re-arm a running
 statement.
 
-**First probe.** `count(*)` of the table vs rows on screen, under the widest
-role (under a manager's RLS the set looks small; the executive's same screen
-is truncated); `pg_stat_user_tables.n_live_tup` is a planner estimate,
-confirm the threshold with `count(*)`; growth from inserts over the last 7
-days; logs for "statement timeout".
+**First probe.** `count(*)` of the object the screen reads vs rows on screen,
+under the widest role (under a manager's RLS the set looks small; the
+executive's same screen is truncated). `pg_stat_user_tables.n_live_tup` is
+off by hundreds and **does not see views or materialized views** at all: use
+it to shortlist candidates, decide the threshold by `count(*)` only. Is the
+sort key unique: `count(*)` vs `count(distinct key)` (an order number was
+1498/1484; task `created_at` 220/111). Growth from the probe; logs for
+"statement timeout".
 
-**Raid signature.** Scan every `.from(` chain in the frontend: no range and
-no limit / with limit / paged; group by table; volumes from the catalogue
-probe plus `count(*)`. The first live raid: 916 chains, 280 unpaged reads over
+**Raid signature.** AST scan of every `.from(` chain in the frontend
+(`references/scan-unbounded-reads.cjs`): RANGE / LIMIT / SINGLE / HEAD /
+UNBOUNDED, excluding insert/update/delete/upsert, grouped by table — the same
+dump gives the "readers" column. Grep reports false "unbounded" where a query
+is assembled in parts. The first live raid: 916 chains, 280 unpaged reads over
 181 tables, 4 screens truncating now, 4 on the threshold, 3 PRs the same day.
 
-**Trap.** A fake API client with a fixture larger than the cap and a group of
-equal keys on the page boundary (the fake must apply `.limit()` capped at
-max-rows); a unique key last in every `ORDER BY`; new screens over heavy views
-read a nightly snapshot. Watchdog for the class: a CI test that fails on
-`.from(<table with ≥ 500 rows>)…select` without a range and on `.limit(N > cap)`,
-the table whitelist refreshed from the volume probe.
+**Trap.** A fake API client with a fixture of 1 050–1 500 rows and a group of
+equal keys on the page boundary. The fake passes through **every** filter
+method of the client and applies `.limit()` capped at max-rows; add missing
+methods all at once (two PRs each adding one collided). GREEN is pages of the
+cap size with the **primary key** last in `ORDER BY`. Type-check the tests
+before pushing: the main build does not compile them, and the first raid's
+first PR failed CI exactly there. A view read by two screens with different
+columns gets one shared reader module. New screens over heavy views read a
+nightly snapshot. **Standard watchdog for the class:** a CI test over the AST
+scan dump that fails on an UNBOUNDED or `.limit(N > cap)` read of a table on
+the whitelist (`count(*) ≥ 500`), the whitelist refreshed weekly from the
+volume probe.
 
 **Before the exorcism.** A removed truncation exposes hidden rows to the
 screen's bulk actions: the reminders queue would have gained 682 drafts, 402

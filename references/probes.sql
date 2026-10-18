@@ -64,21 +64,31 @@ select c.relname, c.relrowsecurity, c.relforcerowsecurity
 -- ──────────────────────────────────────────────────────────────────────────
 -- 3.1 Tables at or near the API row cap (PostgREST default 1000):
 --     every screen reading them without a range is truncated silently.
---     n_live_tup is a planner ESTIMATE; confirm the threshold with count(*) (3.2).
+--     n_live_tup is a planner ESTIMATE (off by hundreds) and does NOT see views
+--     or materialized views: use it to shortlist, decide by count(*) (3.2) on the
+--     object the screen actually reads. Do not filter by schema.
 --     .limit(N) with N above the cap does not raise it — the API returns the cap.
-select relname, n_live_tup
+select schemaname, relname, n_live_tup
   from pg_stat_user_tables
- where schemaname = 'public' and n_live_tup >= 500
+ where n_live_tup >= 500
  order by n_live_tup desc;
 
--- 3.2 Exact count of one table vs rows on screen. Count under the widest
---     role: under a manager's RLS the set is small, the executive's is truncated.
-select count(*) from public.<table>;
+-- 3.2 Exact count of the object (table OR view) the screen reads vs rows on
+--     screen. Count under the widest role: under a manager's RLS the set is
+--     small, the executive's same screen is truncated.
+select count(*) from public.<table_or_view>;
 
--- 3.4 Growth over the last 7 days — predicts the threshold date. Zero inserts
+-- 3.4 Growth: the 30-day increase gives the threshold date ("on threshold" =
+--     rows >= 800 or rows + 30-day growth >= 1000); zero inserts in 7 days
 --     means the pipeline is stalled (class 1), not "the table isn't growing".
-select count(*) filter (where created_at >= now() - interval '7 days') as last_7d,
-       count(*) as total
+select count(*) as total,
+       count(*) filter (where created_at >= now() - interval '30 days') as last_30d,
+       count(*) filter (where created_at >= now() - interval '7 days')  as last_7d
+  from public.<table>;
+
+-- 3.5 Is the paging sort key unique? The difference is the number of repeats;
+--     on a page boundary a repeated key is read twice or lost.
+select count(*) as rows, count(distinct <sort_key>) as distinct_keys
   from public.<table>;
 
 -- 3.3 Role timeouts (PostgREST sessions inherit the role's statement_timeout).
