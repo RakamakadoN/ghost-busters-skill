@@ -2,7 +2,7 @@
 name: ghost-busters
 description: Use when a number, screen, task feed, sync, cron job or report in a CRM/ERP looks wrong or suspiciously quiet — "the total doesn't match the accounting system", "the screen shows 0", "tasks are firing for no reason", "the sync is silent", "tests are green but the page is broken", "nothing arrived", a regression after a fix, any silent failure — and before proposing any fix. Also use for a proactive sweep ("raid") of a module for known ghost classes.
 metadata:
-  version: 1.1.0
+  version: 1.2.0
   origin: distilled from ~60 production incidents in a React + Supabase CRM/ERP
 ---
 
@@ -93,6 +93,12 @@ Rule: **production answers "what is", and only production does.** "No access
 to production" = report line "INSTRUMENTS: not taken" and the diagnosis is
 labelled "hypothesis". An empty result under row-level security is not proof
 that data is absent.
+
+**Live-role rule.** Row-level security hides plans as well as rows: volume,
+timing and query plan are taken under the screen's role (`set local role
+<app role>`, `explain` only), never under the owner. The owner bypasses RLS,
+so its measurement proves nothing: an RPC "at 3.7 ms" timed out again for
+the user because under RLS the expression index was not used.
 
 ### 3. Trail — the single proven path
 
@@ -204,11 +210,35 @@ its branch and a green required check on the new head. Shared files (the fake
 client, a helper) go in one commit in the first PR; the others take them by
 merge. Two PRs each patching the fake "a little" collided in the first raid.
 
+**The raid after a fix is part of the fix.** A repaired source does not
+repair its consumers: a tombstone sweep closed the staging table, but the
+allocation engine, the money marts and the audit view stayed blind and came
+back as three tickets three weeks later; a fix note named four more stale
+dictionaries, nobody raided them, and the next one surfaced two weeks on.
+The RAID line after an exorcism reads: "who else reads what I just fixed".
+
+### Routine mode — the scheduled hunter
+
+Scheduled hunters (a finance hunter, an integration hunter, an orders
+hunter) run without a human. Their rules:
+
+- Read-only: production read-only, no code changes, no PRs.
+- One ghost, one ticket in the Hunt Report format (INSTRUMENTS and TRAIL
+  filled, DIAGNOSIS with confidence), labelled `ghost-class-<N>` from the
+  catalogue plus `latent` when there is no damage yet; a class the catalogue
+  lacks gets `ghost-class-new` and a candidate description.
+- ARCHIVE before filing: memory search and a tracker query by symptom, so
+  the same ghost is not filed twice.
+- "Not ghosts" from the catalogue are never re-filed: finding the hypothesis
+  there is a reason to stop, not a ticket.
+- The class-1 pulse (two independent sources per day) is taken on every run:
+  a frozen source outranks any other finding of the day.
+
 ## Which agent for which class
 
 | Class | Reviewer | Give it |
 |---|---|---|
-| swallowed error, silent refusal | silent-failure / error-handling reviewer | the trail from phase 3, the catch/fallback list |
+| swallowed error, silent refusal, lying default | silent-failure / error-handling reviewer | the trail from phase 3, the catch/fallback/`?? 0` list |
 | row cap, code ≠ prod, race, open door | database reviewer | view/RPC names, migrations, probes |
 | open door, silent RLS refusal | security reviewer | policies, grants, roles |
 | green tests / dead screen | frontend reviewer + a real preview | the component, both themes, mobile |
@@ -248,6 +278,10 @@ RECORD      ticket <id> · project state · memory <type>
 | "Raid later, no time" | Then the report holds the signature and a next step; "later" without them never comes |
 | "It has `.limit(5000)`, so the ceiling is 5000" | The API sets the ceiling: any limit above the row cap is the row cap, silently |
 | "The fix only widens the selection, it's safe" | The widened selection feeds the screen's bulk actions. Count the hidden rows first |
+| "I measured it, the RPC is fast" | Under which role? The owner bypasses RLS. Measure under the screen's role |
+| "The sync is green, so the data is fresh" | Green means "read to the end". The source may be frozen: compare with an independent signal of the day |
+| "No data, I'll fall back to 0 / the old formula" | That is class 13. No data = "—" and UNKNOWN, not a number |
+| "Source fixed, the marts will follow" | They will not. The raid over the consumers is part of the fix |
 
 ## Red flags
 

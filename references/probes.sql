@@ -45,6 +45,19 @@ select source_key, count(*) as items, max(created_at) as last_item
  group by source_key
  order by last_item desc;
 
+-- 1.8 Two-source pulse: the downstream daily count against an independent
+--     signal of the same day. A green sync with 0 downstream rows and 91
+--     upstream documents is a frozen source. The class-1 watchdog is this
+--     query on a schedule.
+select d::date as day,
+       (select count(*) from public.<downstream_table> t
+         where t.created_at >= d and t.created_at < d + interval '1 day') as downstream,
+       (select count(*) from public.<upstream_table> u
+         where u.<doc_date> >= d and u.<doc_date> < d + interval '1 day')  as upstream
+  from generate_series(date_trunc('day', now()) - interval '6 days',
+                       date_trunc('day', now()), interval '1 day') d
+ order by day desc;
+
 -- ──────────────────────────────────────────────────────────────────────────
 -- 2. SILENT REFUSAL — row-level security on the target table
 -- ──────────────────────────────────────────────────────────────────────────
@@ -90,6 +103,15 @@ select count(*) as total,
 --     on a page boundary a repeated key is read twice or lost.
 select count(*) as rows, count(distinct <sort_key>) as distinct_keys
   from public.<table>;
+
+-- 3.6 The query plan AS THE APP ROLE, not as the owner: the owner bypasses
+--     RLS, so its plan and timing prove nothing. explain only, never execute.
+--     Under RLS an expression index (->>, btrim) is not used — look for
+--     "Filter:" after the policy InitPlans instead of an Index Cond.
+set local role <app_role>;
+explain (costs off)
+select * from public.<rpc_or_view>(<args>);
+reset role;
 
 -- 3.3 Role timeouts (PostgREST sessions inherit the role's statement_timeout).
 select rolname, rolconfig
@@ -191,6 +213,49 @@ select p.proname
  where n.nspname = 'public' and p.prosecdef
    and has_function_privilege('authenticated', p.oid, 'EXECUTE')
  order by 1;
+
+-- 11.5 A queue is an RPC: tables the app role can write that a service-role
+--     worker consumes. Candidates — INSERT/UPDATE policies for the app role
+--     with no row restriction; the worker list is cron.job.
+select tablename, policyname, cmd, qual, with_check
+  from pg_policies
+ where schemaname = 'public'
+   and cmd in ('INSERT', 'UPDATE', 'ALL')
+   and 'authenticated' = any(roles)
+   and (with_check is null or with_check in ('true', '(true)'))
+ order by tablename;
+
+-- 11.6 Definer functions that read secrets (a vault) by an id that may come
+--     from a user-editable row — an IDOR into the secret store.
+select p.proname
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public' and p.prosecdef and p.prosrc ilike '%vault.%'
+ order by 1;
+
+-- (Webhook secrets and edge-function gates live outside the database: list the
+--  functions and their environment in the platform; a secret checked "if set"
+--  is a secret that is not set.)
+
+-- ──────────────────────────────────────────────────────────────────────────
+-- 13. LYING DEFAULT — data that looks like a calculation
+-- ──────────────────────────────────────────────────────────────────────────
+-- 13.1 Sales rows whose product has no cost mapping → cost 0, result inflated.
+select s.<period>, s.<product_name>, sum(s.<amount>) as revenue
+  from public.<sales_mart> s
+  left join public.<product_alias_table> a on a.<alias> = s.<product_name>
+  left join public.<sku_table> k on k.<sku_code> = s.<product_name>
+ where a.<id> is null and k.<id> is null
+ group by 1, 2
+ order by 1 desc, 3 desc
+ limit 20;
+
+-- 13.2 Stock moves without a product: a document without a product that
+--     wrote off "any" lot. The write-off function body comes from pg_proc (5.1).
+select doc_type, direction, count(*) as moves, min(moved_at), max(moved_at)
+  from public.<stock_moves_table>
+ where <sku_id> is null
+ group by 1, 2
+ order by 3 desc;
 
 -- ──────────────────────────────────────────────────────────────────────────
 -- 12. DROWNED SIGNAL — volume of automated items

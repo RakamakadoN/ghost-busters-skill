@@ -1,8 +1,9 @@
 # Ghost catalogue
 
-Twelve classes of silent bugs. Each was caught at least twice in a production
+Thirteen classes of silent bugs. Each was caught at least twice in a production
 CRM/ERP (React + TypeScript + Supabase/PostgreSQL + an external accounting
-system). For each class: how it looks, where it lives, the first probe, the
+system). Label precedents in your tracker `ghost-class-<N>` so the catalogue
+grows from a query, not from memory. For each class: how it looks, where it lives, the first probe, the
 trap that keeps it caught, and a real precedent (anonymised). SQL probes are in
 `probes.sql`; section numbers match.
 
@@ -19,18 +20,27 @@ for days; the dashboard is green; nobody got a task. Figures are "old but plausi
 **Where it lives.** A log nobody reads. An alarm that physically cannot fire (a
 BEFORE INSERT trigger returning NULL for every role except the interactive
 one, so robots' tasks silently vanish). A cron job disabled "temporarily" and
-forgotten. An idle cron over an empty table.
+forgotten. An idle cron over an empty table. **A green sync over a frozen
+source**: the sync faithfully reads a spreadsheet nobody has edited for a day
+and reports `ok`; the CRM gets 0 orders on a day the accounting system posted
+91 invoices. Green means "read to the end", not "the source is alive".
 
 **First probe.** `max(created_at)` of the target table vs the expected
-cadence; scheduler `active` flags; last run details; automated tasks by source key.
+cadence; scheduler `active` flags; last run details; automated tasks by source
+key. **Two-source pulse** (probe 1.8): the downstream daily count against an
+independent signal of the same day (upstream documents, bank statement rows);
+a multiple-fold gap under a green sync is the frozen source.
 
 **Trap.** An insert from the robot's role must land in the table (test runs
 under that role, not the interactive one). A freshness watchdog: "last row
-older than N hours → task to a human".
+older than N hours → task to a human". **Standard watchdog for the class:**
+the two-source pulse on a schedule ("N upstream documents today, 0 downstream
+→ task to the owner").
 
 **Precedent.** Three accounting-sync watchdogs produced zero tasks in their
 entire life because of a muting trigger. The payment pipeline cron was switched
 off before a fix and nobody switched it back on: 23 days of inflated receivables.
+A frozen order sheet behind a green sync: 0 orders vs 91 upstream invoices in a day.
 
 ---
 
@@ -70,7 +80,15 @@ Postgres does not guarantee the order of equal keys between `LIMIT/OFFSET`
 requests, so a boundary row is read twice or lost; a business number is not
 unique, the tiebreaker is the primary key. Heavy views read live hit the
 role's `statement_timeout`; `ALTER FUNCTION SET` does not re-arm a running
-statement.
+statement. **The owner's measurement lies**: the database owner bypasses RLS,
+so its 3.7 ms say nothing about the user's query. Under RLS an expression
+index (`->>`, `btrim`, `lower`) is not used for the app role: the functions
+are not leakproof, the condition stays a `Filter` after the policy quals, and
+the same RPC times out again. Measure RLS performance only as the app role
+(`set local role …; explain`, probe 3.6). The cure when every policy is
+row-independent: `SECURITY DEFINER` + an explicit gate equal to the policies
++ a guard on the policy texts. Verify production by `pg_stat_statements`
+for the role; API logs arrive late.
 
 **First probe.** `count(*)` of the object the screen reads vs rows on screen,
 under the widest role (under a manager's RLS the set looks small; the
@@ -146,11 +164,17 @@ the reverse: a guard works in production, is absent from the repo, and a
 in main while production runs an older version. Half the triggers exist only
 in the database. The migration version in history differs from the file name
 (the tool wrote its own). A migration run through the SQL editor **leaves no
-history row at all**.
+history row at all**. **Code names an object or column that does not exist**:
+a view that was never created in production; a search palette reading
+`shipping_points.name`, a column that is not there — PostgREST rejects the
+**whole** query, the client swallows the error, the screen says "nothing
+found". A typed client catches this at compile time; an untyped one never does.
 
 **First probe.** `md5` of the function body in the database vs the file;
 migration history by version **and** by object; the deployed function
-version; triggers on the table.
+version; triggers on the table; `references/scan-select-columns.cjs` — every
+`.from().select()/.eq()/.order()` against the generated schema types (their
+freshness is a separate question: the script prints the file's git date).
 
 **Trap.** A guard on the body hash inside the migration; a parity check after
 rollout; the rule "no version in history ≠ not applied: compare objects".
@@ -178,9 +202,19 @@ entity; the quarantine table; strict `=` on numbers replaced by `trim`.
 data, counting overwrites (must be 0); a key-sweep with a fail-safe for
 truncated runs.
 
+**The raid after the fix is mandatory.** The tombstone sweep marked a deleted
+invoice in staging, but three consumers stayed blind: the allocation engine
+still consumed a payment against it, deleted payments lived on in the money
+marts, the allocation audit did not see allocations on deleted documents. A
+fix note named four more dictionaries outside the daily sync groups; nobody
+raided them, and the next one surfaced two weeks later. A client-card merge
+did not carry the upstream counterparty id of the duplicate, leaving 1M of
+invoices unattached: any merge must carry every external identity.
+
 **Precedent.** Inserting one row at the top of a spreadsheet would have
 rewritten 70 orders. Two deleted invoices inflated monthly revenue and a
-client's debt until a tombstone sweep was added.
+client's debt until a tombstone sweep was added — and then three downstream
+consumers of the tombstone had to be fixed separately.
 
 ---
 
@@ -225,7 +259,12 @@ one date filter was missing.
 
 **Not a ghost:** a suspected timezone shift in monthly cuts turned out to be
 correct: the external system exported local time without a zone, so the UTC
-cut equalled the local calendar.
+cut equalled the local calendar. **Its mirror ghost:** another report applied
++05:00 to that same zoneless local time, and period boundaries moved by five
+hours — the evening of the 31st landed in the next month. One rule: the
+timezone is decided **per source** — real UTC timestamps (CRM data, bank
+imports) are cut in local time, zoneless local time from the external system
+is taken as is. There is no single "switch to local" toggle.
 
 ---
 
@@ -285,16 +324,38 @@ the hole is there.
 An `anon` policy with `using (true)` that the platform advisor **does not
 flag**. A view without `security_invoker`. `SECURITY DEFINER` without need.
 Adding a parameter creates an overload instead of replacing the function.
+Four more shapes, all found by scheduled hunters in one week:
+
+- **A queue is an RPC.** A table consumed by a service-role worker (a
+  notification queue → a cron worker → messages from the company's number)
+  with INSERT open to "any active user": anyone sends anything to anyone.
+  Whoever can write the queue executes the worker.
+- **A secret "if set".** A webhook checks its signature only when the secret
+  is configured, and in production it is not: anonymous callers write under
+  the service role. An optional secret is an absent secret.
+- **A service-role edge function bypasses `revoke`.** Rights removed from an
+  RPC came back through a function that runs as the service role and gates
+  nothing. The gate belongs inside the function, by the caller's role.
+- **DEFINER + an id from the user's row = IDOR.** A definer function reads a
+  secret by an id the user can edit through the API: a foreign id reads any
+  secret, including the service key.
 
 **First probe.** Policies where the anonymous role is in `roles`; routine
-privileges for `anon`/`PUBLIC`; view `reloptions`.
+privileges for `anon`/`PUBLIC`; view `reloptions`; **tables writable by the
+app role that a service-role worker consumes** (probe 11.5); the list of
+serverless functions and their role gates; secrets the code checks
+conditionally (`if (secret)`) — are they set in production.
 
 **Trap.** A test from live roles (anonymous, authenticated, each business role);
 `revoke execute … from public` immediately after every `create function`.
+Queues: INSERT for the robot only, or an RPC with a gate. Webhooks: the
+secret is mandatory, absence is a 503, never "skip the check".
 
 **Precedent.** Nine RPCs executable by the anonymous key, writing into a
 reconciliation table. Eight `using (true)` anonymous write policies the advisor
-never reported.
+never reported. A notification queue open to every user, a webhook with an
+unset secret, a service-role function without a gate, a vault lookup by a
+user-editable id.
 
 ---
 
@@ -319,6 +380,39 @@ and every flag drowned.
 
 ---
 
+## 13. Lying default
+
+**How it looks.** Nothing failed and nothing was swallowed: a default value
+quietly replaced the truth. A tax estimate "falls back to the old formula"
+when the day's cost of goods is missing — a week of 1.8M instead of "—". A
+product without a mapping gets cost 0, and the period's result is inflated. A
+document without a product writes off the oldest lot of **any** product. An
+HTML page on HTTP 200 from the external system is logged as "unknown", and a
+response without `value` is taken as the end of the set. A sync silently
+dropped one field of the row.
+
+**Where it lives.** `?? 0`, `?? []`, `|| legacyFormula`, "no mapping → 0",
+"no product → any", "no secret → skip" (class 11), "not JSON → empty". The
+difference from class 10: there an error existed and was eaten; here there
+is no error, only a default that looks like data.
+
+**First probe.** In money and stock calculations, grep for `?? 0`, `|| 0`,
+`?? []`, `catch … return`, `default:` in mappings; for each, ask "what does
+the screen show when the source is absent: zero, or 'no data'?". On the data:
+sales rows with an empty mapping, cost 0 with sales > 0, a lot written off
+under a product different from the document's.
+
+**Trap.** A test "source absent → the screen shows '—' / UNKNOWN, not a
+number"; the invariant "UNKNOWN is a visible line of its own and is
+subtracted from the result"; for stock write-offs, a document without a
+product is refused, never matched to "any".
+
+**Precedent.** The tax tile, the unmapped product's cost, the any-lot
+write-off, the HTML-on-200 response, the dropped field, and the earlier
+"Expenses 0" tile that should have read "no data".
+
+---
+
 ## Not ghosts — disproved hypotheses
 
 Keep your own list. Re-checking a disproved hypothesis costs a day. Shape:
@@ -330,3 +424,5 @@ Keep your own list. Re-checking a disproved hypothesis costs a day. Shape:
 | chain branches appear as duplicates | one tax id = duplicate | a chain has one tax id for all outlets; normal | ticket id |
 | idle cron every N minutes | an outage | workers over empty queues; their fate is an owner decision | ticket id |
 | "no version in migration history" | migration not applied | SQL editor leaves no history; compare objects | ticket id |
+| an order has no upstream document number although the document exists | the sync is broken / match by amount | the sync is insert-only by design and quarantines the late number; matching by amount yields wrong pairs | ticket id |
+| the RPC is fast when measured | safe to ship | measured as the owner, who bypasses RLS; under the app role it times out | ticket id |

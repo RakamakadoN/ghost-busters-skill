@@ -17,9 +17,11 @@ developer and Claude. Every class in the catalogue was caught at least twice.
 ghost-busters/
 ├── SKILL.md                     the protocol: 8 phases + raid, report format, excuses table
 ├── references/
-│   ├── ghost-classes.md         12 classes of silent bugs, probes, traps, real precedents
+│   ├── ghost-classes.md         13 classes of silent bugs, probes, traps, real precedents
 │   ├── probes.sql               read-only production probes (Postgres / Supabase / pg_cron)
-│   └── hunt-report.md           report template + a worked example
+│   ├── hunt-report.md           report template + a worked example
+│   ├── scan-unbounded-reads.cjs AST scan: supabase-js reads without paging (class 3 signature)
+│   └── scan-select-columns.cjs  AST scan: selected/filtered columns vs generated types (class 5)
 ├── CUSTOMIZE.md                 the five things that are yours to fill in
 └── LICENSE                      MIT
 ```
@@ -54,6 +56,7 @@ RAID          after one catch, sweep for siblings of the same class with paralle
 | 10 | Swallowed error | import "succeeded" with lost rows |
 | 11 | Open door | the anonymous role can call that RPC |
 | 12 | Drowned signal | the alert fired, into 2 446 other alerts |
+| 13 | Lying default | no error anywhere, a `?? 0` replaced the truth |
 
 ## Install
 
@@ -92,6 +95,27 @@ right now, 4 more on the threshold, 3 fixes merged the same day with
 RED→GREEN paging tests. It also produced the "what the fix will open" rule:
 one of the four fixes was held because un-truncating the screen would have
 fed 402 false payment demands into a bulk send.
+
+Version 1.2 came from the next three days: scheduled hunters filed 22
+tickets, and they sorted into one new class (the lying default), six
+extensions of existing ones (a green sync over a frozen source, the owner's
+measurement that lies under RLS, the column that does not exist, the fix
+that never reached its consumers, the mirror timezone bug, four new shapes
+of open door), the live-role rule, a routine mode for scheduled hunters, and
+the second scanner.
+
+## Two scanners
+
+```bash
+node .claude/skills/ghost-busters/references/scan-unbounded-reads.cjs src           # class 3: reads that hit the row cap
+node .claude/skills/ghost-busters/references/scan-select-columns.cjs src \
+     --types src/types/database.types.ts --schema-for features/epm/=epm             # class 5: columns the schema lacks
+```
+
+Both walk every supabase-js `.from(` chain with the TypeScript compiler API,
+follow chains assembled through a variable (grep cannot), and print
+file:line findings grouped by table. The second one needs the generated
+Supabase types and tells you how old they are.
 
 ## Adapting
 
