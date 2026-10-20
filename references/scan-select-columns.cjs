@@ -5,8 +5,8 @@
  *
  * PostgREST rejects the WHOLE query when a select list or a filter names a
  * column that does not exist; the client usually swallows the error and the
- * screen shows "nothing found" (KAN-323: Ctrl+K palette read
- * shipping_points.name, which does not exist). A typed client catches this at
+ * screen shows "nothing found" (a search palette once read a column that was
+ * not there and found nothing, for weeks). A typed client catches this at
  * tsc time; an untyped one never does. This script checks every call site.
  *
  * Schema source: the generated Supabase types (src/types/database.types.ts —
