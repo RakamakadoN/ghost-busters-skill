@@ -21,8 +21,10 @@ ghost-busters/
 │   ├── probes.sql               read-only production probes (Postgres / Supabase / pg_cron)
 │   ├── hunt-report.md           report template + a worked example
 │   ├── scan-unbounded-reads.cjs AST scan: supabase-js reads without paging (class 3 signature)
-│   └── scan-select-columns.cjs  AST scan: selected/filtered columns vs generated types (class 5)
-├── CUSTOMIZE.md                 the five things that are yours to fill in
+│   ├── scan-select-columns.cjs  AST scan: selected/filtered columns vs generated types (class 5)
+│   └── lib/chains.cjs           shared chain walker, with the analysis limits spelled out
+├── tests/                       scanner regression tests + fixtures, and hunt scenarios with criteria
+├── CUSTOMIZE.md                 the six things that are yours to fill in
 └── LICENSE                      MIT
 ```
 
@@ -40,7 +42,7 @@ ghost-busters/
 RAID          after one catch, sweep for siblings of the same class with parallel agents
 ```
 
-## The twelve ghosts
+## The thirteen ghosts
 
 | # | Class | Looks like |
 |---|---|---|
@@ -66,7 +68,7 @@ Copy the folder into your project's skills directory:
 git clone https://github.com/RakamakadoN/ghost-busters-skill .claude/skills/ghost-busters
 ```
 
-Then fill in `CUSTOMIZE.md` (canonical sources, home predicates, pipelines
+Then fill in `CUSTOMIZE.md` (canonical sources, home predicates, rollout pipeline, pipelines
 and their watchdogs, axes and windows, memory tools). Without it the skill
 still works; with it the hunt stops asking.
 
@@ -74,11 +76,26 @@ Invoke with `/ghost-busters <symptom>` or `/ghost-busters raid <area>`. Claude
 Code also picks it up automatically from the `description` when a symptom
 matches.
 
-## Does it work?
+## Does it work? What is evidence and what is not
 
-The skill was built test-first. The same scenario — *"the debt tile shows
-9.4M, accounting says half have paid, meeting in 30 minutes"* — was given to
-an agent with and without the skill, read-only, same tool budget.
+Four different kinds of claim live here. They are not equally strong.
+
+**1. The author's experience (not independently verifiable).** The skill was
+distilled from roughly sixty incidents in one production CRM/ERP, and the
+catalogue's precedents are those incidents, anonymised. Its first live raid
+(class 3) scanned 916 query chains and found 4 screens truncating in
+production, 4 more near the threshold; 3 fixes were merged the same day with
+RED→GREEN paging tests, and one fix was held because un-truncating the
+screen would have fed 402 false payment demands into a bulk send — that is
+where the "what the fix will open" rule comes from. Version 1.2 came from 22
+tickets filed by scheduled hunters over the next three days. None of these
+logs are published here; the numbers are the author's account, and the
+count of tickets says nothing about their quality.
+
+**2. One published, checkable example.** `references/hunt-report.md` holds
+the same scenario — *"the debt tile shows 9.4M, accounting says half have
+paid, meeting in 30 minutes"* — run once with the skill and once without,
+read-only, same tool budget, with both transcripts summarised:
 
 | | without | with |
 |---|---|---|
@@ -87,35 +104,50 @@ an agent with and without the skill, read-only, same tool budget.
 | fix | rewrite the task function, pause its cron | no change until confirmed; listed everything else on the same table |
 | watchdog | not raised | freshness watchdog proposed |
 
-The full example is in `references/hunt-report.md`.
+It is a single pair of runs on one scenario: a worked example of what the
+protocol changes, not a measurement of how often.
 
-The first live raid (class 3, row-cap truncation) ran the day the skill
-landed: 916 query chains scanned, 4 screens found truncating in production
-right now, 4 more on the threshold, 3 fixes merged the same day with
-RED→GREEN paging tests. It also produced the "what the fix will open" rule:
-one of the four fixes was held because un-truncating the screen would have
-fed 402 false payment demands into a bulk send.
+**3. Reproducible tests (run them).** The two scanners have regression
+tests on small local fixtures, no database needed:
 
-Version 1.2 came from the next three days: scheduled hunters filed 22
-tickets, and they sorted into one new class (the lying default), six
-extensions of existing ones (a green sync over a frozen source, the owner's
-measurement that lies under RLS, the column that does not exist, the fix
-that never reached its consumers, the mirror timezone bug, four new shapes
-of open door), the live-role rule, a routine mode for scheduled hunters, and
-the second scanner.
+```bash
+npm install
+npm test
+```
+
+They pin the classification of plain, whitespace-broken, variable-built,
+conditional and rebound chains, scope separation, non-table `.from()`
+calls, select-list parsing (casts, aliases, JSON paths, embeds, unsupported
+items), missing columns and objects, and exit-code consistency between text
+and JSON modes. `tests/scenarios.md` adds a small set of hunt scenarios with
+pass criteria for anyone who wants to evaluate the protocol itself.
+
+**4. Limits of the evidence.** There is no benchmark of the protocol across
+many agents or incidents, no measurement of false-positive and false-negative
+rates for the hunt, and the scanners are static: they find suspicious call
+sites and cannot prove a production bug exists or that none does. Treat the
+catalogue as a checklist shaped by one system's history, and the scanners
+as a way to find candidates for the probes.
 
 ## Two scanners
 
 ```bash
-node .claude/skills/ghost-busters/references/scan-unbounded-reads.cjs src           # class 3: reads that hit the row cap
-node .claude/skills/ghost-busters/references/scan-select-columns.cjs src \
-     --types src/types/database.types.ts --schema-for features/epm/=epm             # class 5: columns the schema lacks
+node references/scan-unbounded-reads.cjs src                       # class 3: reads that can hit the row cap
+node references/scan-select-columns.cjs src \
+     --types src/types/database.types.ts --schema-for features/epm/=epm   # class 5: columns the schema lacks
 ```
 
+(When installed as a skill, prefix the paths with `.claude/skills/ghost-busters/`.)
+
 Both walk every supabase-js `.from(` chain with the TypeScript compiler API,
-follow chains assembled through a variable (grep cannot), and print
-file:line findings grouped by table. The second one needs the generated
-Supabase types and tells you how old they are.
+follow chains assembled through a variable within the enclosing function
+(grep cannot), and print file:line findings grouped by table. A bound that
+exists on only one control-flow path is reported as CONDITIONAL, a variable
+rebound to another query as UNKNOWN, a literal `.range(0, 999)` as one page
+rather than pagination. The second scanner needs the generated Supabase
+types and prints how old they are. Their analysis limits are listed at the
+top of `references/lib/chains.cjs`; a finding is a call site to check, not a
+proven bug, and a clean scan is not proof of absence.
 
 ## Adapting
 
@@ -133,6 +165,6 @@ the portable one.
 
 **Русская версия в двух словах.** Это протокол охоты за «призраками» —
 багами, которые не падают, а показывают 0, «успех» или зелёный CI. Восемь фаз
-плюс рейд, каталог двенадцати классов с реальными прецедентами, read-only
+плюс рейд, каталог тринадцати классов с реальными прецедентами, read-only
 зонды прода и обязательный формат отчёта. Проверен парным прогоном агента
 без скилла и со скиллом на реальном инциденте.

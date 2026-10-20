@@ -415,14 +415,20 @@ write-off, the HTML-on-200 response, the dropped field, and the earlier
 
 ## Not ghosts — disproved hypotheses
 
-Keep your own list. Re-checking a disproved hypothesis costs a day. Shape:
+Keep your own list. Re-checking a disproved hypothesis without reason costs
+a day; trusting one after the world changed costs more. A record is a dated
+observation, so every row carries when and where it was true, what proved
+it, where it applies, and what would make it stale. Shape:
 
-| Symptom | Rejected hypothesis | Fact | Source |
-|---|---|---|---|
-| automation run table is empty | the automation cron is broken | rules were never enabled; the engine runs client-side; the cron is a notification-queue worker | ticket id |
-| first-of-month documents land in the previous month | UTC monthly cut is wrong | the external system exports local time without a zone; UTC cut = local calendar | ticket id |
-| chain branches appear as duplicates | one tax id = duplicate | a chain has one tax id for all outlets; normal | ticket id |
-| idle cron every N minutes | an outage | workers over empty queues; their fate is an owner decision | ticket id |
-| "no version in migration history" | migration not applied | SQL editor leaves no history; compare objects | ticket id |
-| an order has no upstream document number although the document exists | the sync is broken / match by amount | the sync is insert-only by design and quarantines the late number; matching by amount yields wrong pairs | ticket id |
-| the RPC is fast when measured | safe to ship | measured as the owner, who bypasses RLS; under the app role it times out | ticket id |
+| Symptom | Rejected hypothesis | Evidence | Date · environment · version | Scope | Re-check when |
+|---|---|---|---|---|---|
+| automation run table is empty | the automation cron is broken | rules were never enabled; the engine runs client-side; the cron is a notification-queue worker | 2026-09-22 · production · (rules table, cron job id) | that cron and that rules engine | rules get enabled; the cron's command changes |
+| first-of-month documents land in the previous month | UTC monthly cut is wrong | the external system exports local time without a zone; the UTC cut equals the local calendar (hour histogram of 18 860 documents) | 2026-10-16 · production · marts as of that day | the accounting import only | the export format gains a timezone; a new source with real UTC stamps joins the mart |
+| chain branches appear as duplicates | one tax id = duplicate | a chain has one tax id for all outlets; normal | 2026-10-05 · production | client deduplication | the business decides to model chains explicitly |
+| idle cron every N minutes | an outage | workers over empty queues; their fate is an owner decision | 2026-09-22 · production | those two queue workers | the queues start receiving rows |
+| "no version in migration history" | migration not applied | SQL editor leaves no history row; the objects exist and their md5 matches | 2026-10-02 · production | migrations applied through the SQL editor | the project switches to a tool that records history |
+| an order has no upstream document number although the document exists | the sync is broken / match by amount | the sync is insert-only by design and quarantines the late number; matching by amount yields wrong pairs (1 of 16 unambiguous) | 2026-10-19 · production · sync v2.1 | the spreadsheet sync | the sync's identity rules change |
+| the RPC is fast when measured | safe to ship | measured as the owner, who bypasses RLS; under the app role it timed out | 2026-10-19 · production · before the definer fix | that RPC and any query under RLS | always re-measure under the app role after any change to policies or indexes |
+
+A row whose "re-check when" condition has happened is a lead to re-test, not
+a fact to cite.

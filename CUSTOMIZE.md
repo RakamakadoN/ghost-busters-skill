@@ -1,6 +1,6 @@
 # Adapting Ghost Busters to your project
 
-The algorithm and the class catalogue are universal. Five things are yours.
+The algorithm and the class catalogue are universal. Six things are yours.
 Fill them in once, keep them next to the skill (a `project.md` in the skill
 folder, or your `CLAUDE.md` / `AGENTS.md`), and the hunt stops asking.
 
@@ -52,7 +52,23 @@ Name every way your system distinguishes businesses, contours, brands or
 tenants, and whether any of them is inverted for historical reasons. Name the
 start date of each business. A figure without its axis and window is not a figure.
 
-## 5. Memory tools
+## 5. Rollout pipeline
+
+What pushing to main actually deploys in this project, and what does not.
+The skill's "compatibility plan" (phase 5) needs these facts, not a rule.
+
+| Piece | Deployed by | Verified by |
+|---|---|---|
+| frontend | CI on merge to main → hosting platform | deployment id / build hash |
+| database migrations | (CI on merge / a manual step / a tool) | migration history **and** object md5 |
+| edge / serverless functions | (CI on merge / manual deploy) | deployed version number |
+| cron / scheduled jobs | (migration / dashboard) | job list with `active` flags |
+
+The order of a change follows the dependency between these pieces: a
+compatible addition first, readers next, removals last; old jobs and old
+clients counted separately.
+
+## 6. Memory tools
 
 Name the tool and the queries. The skill's phase 1 expects 3–4 semantic queries
 before the first hypothesis. If you have no memory store yet, start one: a

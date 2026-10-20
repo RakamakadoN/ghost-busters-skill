@@ -1,7 +1,17 @@
--- Ghost Busters — production probes. All queries are READ-ONLY.
+-- Ghost Busters — production probes. All queries are READ-ONLY: SELECTs over
+-- catalogs and tables, and EXPLAIN without ANALYZE. None of them writes.
 -- Written for PostgreSQL behind PostgREST/Supabase with pg_cron; adapt names
--- in CUSTOMIZE.md. Replace :'table', :'fn', :'view' with your objects.
--- Never run begin … rollback experiments on production without owner permission.
+-- in CUSTOMIZE.md. Replace :'table', :'fn', :'view' and <placeholders> with
+-- your objects — the templates are shapes, not runnable as-is.
+--
+-- Limits of read-only probing: a SELECT shows what is there, not what the
+-- application would do; counts under your role may differ from the user's
+-- (RLS); long probes are subject to the session's statement_timeout — set a
+-- short one explicitly (`set statement_timeout = '15s'`) rather than letting
+-- a probe run free on a busy database. Probe 3.6 opens a transaction for
+-- `set local` + EXPLAIN only; treat it as an experiment and run it on a copy
+-- unless the owner has allowed it on production. Never put a real user's id,
+-- token or secret into a probe.
 
 -- ──────────────────────────────────────────────────────────────────────────
 -- 0. Is this production? How big is it?
@@ -104,14 +114,49 @@ select count(*) as total,
 select count(*) as rows, count(distinct <sort_key>) as distinct_keys
   from public.<table>;
 
--- 3.6 The query plan AS THE APP ROLE, not as the owner: the owner bypasses
---     RLS, so its plan and timing prove nothing. explain only, never execute.
---     Under RLS an expression index (->>, btrim) is not used — look for
---     "Filter:" after the policy InitPlans instead of an Index Cond.
+-- 3.6 Checking a query the way the USER runs it — four separate checks.
+--     The database owner bypasses RLS, so its plan and timing prove nothing.
+--     Facts from the PostgreSQL docs (SET ROLE, SET): SET ROLE does not apply
+--     the role's ALTER ROLE … SET settings (that happens only at login);
+--     SET LOCAL outside a transaction block only emits a warning. Facts from
+--     the Supabase RLS docs: policy tests switch identity with
+--     `set local role` + `set local request.jwt.claim.sub` inside begin … rollback.
+--
+--     READ-ONLY by construction: only EXPLAIN (never EXPLAIN ANALYZE) and
+--     catalog reads. The transaction below contains no writes; it still is a
+--     transaction on the target database, so run it on a local copy or a test
+--     database unless the owner has allowed it on production. Adapt the role
+--     name, the claim name and the statement to your platform.
+
+-- 3.6a Privileges of the role: can it reach the object at all.
+select has_table_privilege('<app_role>', 'public.<table>', 'SELECT') as can_select,
+       has_function_privilege('<app_role>', 'public.<fn>(<argtypes>)', 'EXECUTE') as can_execute;
+
+-- 3.6b Policies as a specific user + 3.6c the plan. One transaction, rolled back.
+--      `set local role` alone is NOT the user: policies that read auth.uid(),
+--      JWT claims or a tenant setting see nothing until those are set.
+--      The claim setting name depends on your platform's helper functions
+--      (Supabase's docs use request.jwt.claim.sub); check the helper's body
+--      with probe 5.1 before relying on a name.
+begin;
 set local role <app_role>;
+set local request.jwt.claim.sub = '<user uuid from a test database, never a real person>';
 explain (costs off)
-select * from public.<rpc_or_view>(<args>);
-reset role;
+select * from public.<rpc_or_view>(<args>);   -- look for "Filter:" after the policy sub-plans where an Index Cond was expected
+rollback;
+
+-- 3.6d Timing. Because SET ROLE skips ALTER ROLE settings, the role's
+--      statement_timeout is NOT in force under `set role`: a query that times
+--      out for real users can finish here. Either set the role's value
+--      explicitly (from pg_roles.rolconfig, probe 3.3) inside the same
+--      transaction — `set local statement_timeout = '<role value>'` — or take
+--      the real numbers from pg_stat_statements for that role:
+select calls, mean_exec_time, max_exec_time, left(query, 120) as query
+  from pg_stat_statements s
+  join pg_roles r on r.oid = s.userid
+ where r.rolname = '<app_role>' and s.query ilike '%<fn_or_table>%'
+ order by max_exec_time desc
+ limit 10;
 
 -- 3.3 Role timeouts (PostgREST sessions inherit the role's statement_timeout).
 select rolname, rolconfig

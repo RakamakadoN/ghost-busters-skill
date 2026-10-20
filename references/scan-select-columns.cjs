@@ -11,22 +11,32 @@
  *
  * Schema source: the generated Supabase types (src/types/database.types.ts —
  * Tables and Views with their Row columns). Their freshness is a separate
- * question: `git log -1 -- <types file>` says when they were last regenerated.
+ * question: the script prints the file's last git commit date when it can.
  *
- * Checks per `.from('<object>')` chain:
- *   MISSING_OBJECT   the table/view is not in the schema (or lives in another schema)
+ * Findings per `.from('<object>')` chain:
+ *   MISSING_OBJECT   the table/view is not in the schema
  *   MISSING_COLUMN   a column in .select('…') or in a filter/order is not in the object
  *   EMBED_UNKNOWN    an embedded relation `rel(...)` names no table/view (FK-name embeds are skipped)
+ *   UNSUPPORTED      a select item the parser does not understand (quoted identifiers,
+ *                    spaces, unbalanced parentheses) — check it by hand, it is NOT a missing column
+ *   OTHER_SCHEMA     the object lives in a schema the types file does not cover — unverifiable
+ *
+ * Understood select syntax: `col`, `alias:col`, `col::cast`, `col->path`,
+ * `col->>path`, `rel(cols)`, `alias:rel(cols)`, `rel!hint(cols)`, `...rel(cols)`,
+ * `rel(count)`, `*`. Anything else is UNSUPPORTED.
+ *
+ * This is a static scan, not a proof: a finding is a query to check, and the
+ * types file may simply be older than the object.
  *
  * Usage:
  *   node scan-select-columns.cjs [srcDir=src] [--types src/types/database.types.ts] [--json]
  *        [--schema-for <path-substring>=<schema>]...   files whose client is scoped to another
  *                                                      schema by a helper the chain cannot show
- *                                                      (e.g. --schema-for features/epm/=epm)
  *
- * Objects in a schema the types file does not cover are reported as OTHER_SCHEMA
- * (unverifiable), not as missing. The types directory itself is skipped (it holds
- * the deliberate `no_such_column` guard).
+ * Exit code: 1 when a hard finding (MISSING_OBJECT, MISSING_COLUMN, EMBED_UNKNOWN)
+ * exists, else 0 — identical in text and JSON mode. UNSUPPORTED and OTHER_SCHEMA
+ * never fail the run. The types directory itself is skipped (it may hold a
+ * deliberate `no_such_column` compile-time guard).
  *
  * Requires `typescript` resolvable from the current working directory.
  */
@@ -35,6 +45,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { loadTypescript, walkSources, literalText, isTableFrom, explicitSchema, chainAbove, followVariable } = require('./lib/chains.cjs');
 
 const args = process.argv.slice(2);
 const VALUE_OPTS = new Set(['--types', '--schema-for']);
@@ -54,13 +65,7 @@ args.forEach((a, i) => {
   }
 });
 
-let ts;
-try {
-  ts = require(require.resolve('typescript', { paths: [process.cwd()] }));
-} catch {
-  console.error('typescript not found from ' + process.cwd() + ' — run from the project root');
-  process.exit(2);
-}
+const ts = loadTypescript();
 
 // ── schema from generated types ────────────────────────────────────────────
 function loadSchema(file) {
@@ -89,74 +94,10 @@ function loadSchema(file) {
   return schema;
 }
 
-// ── chain walking (same approach as scan-unbounded-reads.cjs) ──────────────
-function chainAbove(node) {
-  const calls = [];
-  let cur = node;
-  let top = node;
-  for (;;) {
-    const p = cur.parent;
-    if (!p) break;
-    if (ts.isPropertyAccessExpression(p) && p.expression === cur) {
-      const gp = p.parent;
-      if (gp && ts.isCallExpression(gp) && gp.expression === p) {
-        calls.push({ name: p.name.text, args: gp.arguments });
-        cur = gp;
-        top = gp;
-        continue;
-      }
-      break;
-    }
-    if (ts.isAsExpression(p) || ts.isNonNullExpression(p) || ts.isParenthesizedExpression(p) || ts.isSatisfiesExpression?.(p)) {
-      cur = p;
-      continue;
-    }
-    break;
-  }
-  return { calls, top };
-}
-
-function followVariable(top, sf) {
-  let p = top.parent;
-  while (p && (ts.isAsExpression(p) || ts.isNonNullExpression(p) || ts.isParenthesizedExpression(p) || ts.isAwaitExpression(p))) p = p.parent;
-  let ident = null;
-  if (p && ts.isVariableDeclaration(p) && ts.isIdentifier(p.name)) ident = p.name.text;
-  else if (p && ts.isBinaryExpression(p) && p.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(p.left)) ident = p.left.text;
-  if (!ident) return [];
-  let scope = p;
-  while (scope && !ts.isFunctionLike(scope) && !ts.isSourceFile(scope)) scope = scope.parent;
-  const extra = [];
-  const rootsIn = (n) => {
-    if (!n) return false;
-    if (ts.isIdentifier(n)) return n.text === ident;
-    if (ts.isPropertyAccessExpression(n) || ts.isCallExpression(n)) return rootsIn(n.expression);
-    if (ts.isParenthesizedExpression(n) || ts.isAsExpression(n) || ts.isNonNullExpression(n) || ts.isAwaitExpression(n)) return rootsIn(n.expression);
-    if (ts.isConditionalExpression(n)) return rootsIn(n.whenTrue) || rootsIn(n.whenFalse);
-    return false;
-  };
-  const visit = (n) => {
-    if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && rootsIn(n.expression.expression)) {
-      extra.push({ name: n.expression.name.text, args: n.arguments });
-    }
-    ts.forEachChild(n, visit);
-  };
-  visit(scope || sf);
-  return extra;
-}
-
-const lit = (n) => (n && (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) ? n.text : null);
-
-/** Schema the chain targets: `.schema('epm').from(...)`, a --schema-for rule for the file, or public. */
-function schemaOf(fromCall, file) {
-  const recv = fromCall.expression.expression;
-  if (ts.isCallExpression(recv) && ts.isPropertyAccessExpression(recv.expression) && recv.expression.name.text === 'schema') {
-    return lit(recv.arguments[0]) || 'public';
-  }
-  const rule = SCHEMA_FOR.find((r) => file.includes(r.sub));
-  return rule ? rule.sch : 'public';
-}
-
 // ── PostgREST select-list parsing ──────────────────────────────────────────
+const AGGREGATES = new Set(['count', 'sum', 'avg', 'min', 'max']);
+const ITEM_RE = /^[A-Za-z0-9_:>()!.*,\-]+$/;
+
 function splitTopLevel(s) {
   const out = [];
   let depth = 0;
@@ -164,125 +105,133 @@ function splitTopLevel(s) {
   for (const ch of s) {
     if (ch === '(') depth++;
     if (ch === ')') depth--;
+    if (depth < 0) return null; // unbalanced
     if (ch === ',' && depth === 0) {
       out.push(cur);
       cur = '';
     } else cur += ch;
   }
+  if (depth !== 0) return null;
   if (cur.trim()) out.push(cur);
   return out.map((x) => x.trim()).filter(Boolean);
 }
 
-const AGGREGATES = new Set(['count', 'sum', 'avg', 'min', 'max']);
+/** Strip `alias:` (a single colon that is not part of `::`). */
+function stripAlias(item) {
+  const m = item.match(/^([A-Za-z0-9_]+):(?!:)(.+)$/);
+  return m ? m[2] : item;
+}
 
-/** Returns { columns: [...], embeds: [{ name, inner }] } for one select string.
- *  Inside an embed, a bare aggregate name (`rel(count)`) is PostgREST syntax, not a column. */
+/** Column name of a select item or filter argument: drop `::cast` and `->`/`->>` paths. */
+function baseColumn(s) {
+  return s.split('->')[0].split('::')[0];
+}
+
+/**
+ * Parse one select string. Returns { columns, embeds, unsupported } where
+ * unsupported lists items the parser refuses rather than guesses at.
+ */
 function parseSelect(s, insideEmbed = false) {
   const columns = [];
   const embeds = [];
-  for (const item of splitTopLevel(s.replace(/\s+/g, ''))) {
+  const unsupported = [];
+  const items = splitTopLevel(s.replace(/\s+/g, ''));
+  if (items === null) return { columns, embeds, unsupported: [s] };
+  for (const raw of items) {
+    if (!ITEM_RE.test(raw)) {
+      unsupported.push(raw);
+      continue;
+    }
+    const item = raw.replace(/^\.\.\./, ''); // spread embed `...rel(cols)`
     const paren = item.indexOf('(');
     if (paren >= 0) {
-      let head = item.slice(0, paren);
+      let head = stripAlias(item.slice(0, paren));
       const inner = item.slice(paren + 1, item.lastIndexOf(')'));
-      if (head.includes(':')) head = head.slice(head.indexOf(':') + 1); // alias:rel
-      head = head.replace(/^!?/, '').split('!')[0]; // rel!fk / !inner
+      head = head.replace(/^!/, '').split('!')[0]; // rel!fk / rel!inner
       embeds.push({ name: head, inner });
       continue;
     }
     if (item === '*') continue;
-    let col = item;
-    if (col.includes(':')) col = col.slice(col.indexOf(':') + 1); // alias:col
-    col = col.split('::')[0]; // cast
-    col = col.split('->')[0]; // json path
-    col = col.replace(/\.(count|sum|avg|min|max)\(\)$/, ''); // aggregates
+    const col = baseColumn(stripAlias(item));
     if (insideEmbed && AGGREGATES.has(col)) continue;
-    if (col && col !== '*' && !col.includes('.')) columns.push(col);
+    if (col.includes('.')) {
+      unsupported.push(raw);
+      continue;
+    }
+    if (col && col !== '*') columns.push(col);
   }
-  return { columns, embeds };
+  return { columns, embeds, unsupported };
 }
 
-const FILTER_METHODS = new Set(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like', 'ilike', 'imatch', 'is', 'in', 'contains', 'containedBy', 'order', 'textSearch', 'rangeGt', 'rangeLt', 'overlaps']);
+const FILTER_METHODS = new Set(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like', 'ilike', 'imatch', 'is', 'in', 'contains', 'containedBy', 'order', 'textSearch', 'rangeGt', 'rangeLt', 'overlaps', 'not', 'filter']);
 
 function columnOfFilterArg(s) {
   if (!s) return null;
-  let col = s.split('->')[0];
-  col = col.split('::')[0];
+  const col = baseColumn(s);
   if (col.includes('.')) return null; // embedded.column — skip
   return col;
 }
 
 // ── scan ───────────────────────────────────────────────────────────────────
-const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', '.git', 'coverage']);
-function* walk(dir) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (SKIP_DIRS.has(entry.name)) continue;
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (path.resolve(full) === path.resolve(path.dirname(TYPES))) continue; // the types dir holds the deliberate guard
-      yield* walk(full);
-    } else if (/\.(ts|tsx)$/.test(entry.name) && !/\.(test|spec)\.tsx?$/.test(entry.name)) yield full;
-  }
-}
-
 const schema = loadSchema(TYPES);
 const knownSchemas = new Set([...schema.keys()].map((k) => k.split('.')[0]));
-let typesDate = null;
-try {
-  typesDate = execFileSync('git', ['log', '-1', '--format=%cs', '--', TYPES], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() || null;
-} catch {
-  /* not a git checkout — no date */
-}
 const byName = new Map(); // bare object name -> keys (for embed lookup)
 for (const key of schema.keys()) {
   const bare = key.split('.')[1];
   if (!byName.has(bare)) byName.set(bare, []);
   byName.get(bare).push(key);
 }
+let typesDate = null;
+try {
+  typesDate = execFileSync('git', ['log', '-1', '--format=%cs', '--', TYPES], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() || null;
+} catch {
+  /* not a git checkout — no date */
+}
 
 const findings = [];
 let chains = 0;
-for (const file of walk(srcDir)) {
+for (const file of walkSources(srcDir, [path.dirname(TYPES)])) {
   const text = fs.readFileSync(file, 'utf8');
-  if (!text.includes('.from(')) continue;
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const rel = path.relative(process.cwd(), file);
+  const push = (line, object, kind, detail) => findings.push({ file: rel, line, object, kind, detail });
   const visit = (node) => {
-    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'from') {
-      const table = lit(node.arguments[0]);
-      if (table) {
-        chains++;
-        const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
-        const sch = schemaOf(node, rel);
-        const key = `${sch}.${table}`;
-        const obj = schema.get(key);
-        const { calls, top } = chainAbove(node);
-        const all = calls.concat(followVariable(top, sf));
-        if (!obj) {
-          if (!knownSchemas.has(sch)) findings.push({ file: rel, line: line + 1, object: key, kind: 'OTHER_SCHEMA', detail: `schema "${sch}" is not in the types file — unverifiable` });
-          else findings.push({ file: rel, line: line + 1, object: key, kind: 'MISSING_OBJECT', detail: 'not in generated types' + (typesDate ? ` (types dated ${typesDate})` : '') });
-        } else {
-          for (const c of all) {
-            if (c.name === 'select') {
-              const s = lit(c.args[0]);
-              if (!s) continue;
-              const { columns, embeds } = parseSelect(s);
-              for (const col of columns) if (!obj.columns.has(col)) findings.push({ file: rel, line: line + 1, object: key, kind: 'MISSING_COLUMN', detail: `select: ${col}` });
-              for (const e of embeds) {
-                if (!byName.has(e.name)) {
-                  findings.push({ file: rel, line: line + 1, object: key, kind: 'EMBED_UNKNOWN', detail: `embed: ${e.name}(…)` });
-                } else {
-                  const target = schema.get(byName.get(e.name)[0]);
-                  for (const col of parseSelect(e.inner, true).columns) if (!target.columns.has(col)) findings.push({ file: rel, line: line + 1, object: byName.get(e.name)[0], kind: 'MISSING_COLUMN', detail: `embed ${e.name}: ${col}` });
-                }
+    if (isTableFrom(ts, node)) {
+      chains++;
+      const table = literalText(ts, node.arguments[0]);
+      const { line: l0 } = sf.getLineAndCharacterOfPosition(node.expression.name.getStart(sf));
+      const line = l0 + 1;
+      const rule = SCHEMA_FOR.find((r) => rel.includes(r.sub));
+      const sch = explicitSchema(ts, node) || (rule ? rule.sch : 'public');
+      const key = `${sch}.${table}`;
+      const obj = schema.get(key);
+      const { calls, top } = chainAbove(ts, node);
+      const all = calls.concat(followVariable(ts, top, sf, node).calls);
+      if (!obj) {
+        if (!knownSchemas.has(sch)) push(line, key, 'OTHER_SCHEMA', `schema "${sch}" is not in the types file — unverifiable`);
+        else push(line, key, 'MISSING_OBJECT', 'not in generated types' + (typesDate ? ` (types dated ${typesDate})` : ''));
+      } else {
+        for (const c of all) {
+          if (c.name === 'select') {
+            const s = literalText(ts, c.args[0]);
+            if (!s) continue;
+            const { columns, embeds, unsupported } = parseSelect(s);
+            for (const u of unsupported) push(line, key, 'UNSUPPORTED', `select item not understood: ${u}`);
+            for (const col of columns) if (!obj.columns.has(col)) push(line, key, 'MISSING_COLUMN', `select: ${col}`);
+            for (const e of embeds) {
+              if (!byName.has(e.name)) {
+                push(line, key, 'EMBED_UNKNOWN', `embed: ${e.name}(…)`);
+                continue;
               }
-            } else if (FILTER_METHODS.has(c.name)) {
-              const col = columnOfFilterArg(lit(c.args[0]));
-              if (col && !obj.columns.has(col)) findings.push({ file: rel, line: line + 1, object: key, kind: 'MISSING_COLUMN', detail: `${c.name}: ${col}` });
-            } else if (c.name === 'not' || c.name === 'filter') {
-              const col = columnOfFilterArg(lit(c.args[0]));
-              if (col && !obj.columns.has(col)) findings.push({ file: rel, line: line + 1, object: key, kind: 'MISSING_COLUMN', detail: `${c.name}: ${col}` });
+              const targetKey = byName.get(e.name)[0];
+              const target = schema.get(targetKey);
+              const inner = parseSelect(e.inner, true);
+              for (const u of inner.unsupported) push(line, targetKey, 'UNSUPPORTED', `embed ${e.name}: item not understood: ${u}`);
+              for (const col of inner.columns) if (!target.columns.has(col)) push(line, targetKey, 'MISSING_COLUMN', `embed ${e.name}: ${col}`);
             }
+          } else if (FILTER_METHODS.has(c.name)) {
+            const col = columnOfFilterArg(literalText(ts, c.args[0]));
+            if (col && !obj.columns.has(col)) push(line, key, 'MISSING_COLUMN', `${c.name}: ${col}`);
           }
         }
       }
@@ -292,22 +241,26 @@ for (const file of walk(srcDir)) {
   visit(sf);
 }
 
+const HARD = new Set(['MISSING_OBJECT', 'MISSING_COLUMN', 'EMBED_UNKNOWN']);
+const hard = findings.filter((f) => HARD.has(f.kind)).length;
+const exitCode = hard ? 1 : 0;
+
 if (AS_JSON) {
   console.log(JSON.stringify(findings, null, 1));
-  process.exit(findings.length ? 1 : 0);
+  process.exit(exitCode);
 }
 
 const tables = [...schema.values()].filter((o) => o.kind === 'table').length;
 const views = schema.size - tables;
-const hard = findings.filter((f) => f.kind !== 'OTHER_SCHEMA').length;
-console.log(`schema: ${TYPES}${typesDate ? ` (dated ${typesDate})` : ''} · ${tables} tables · ${views} views · chains checked: ${chains} · findings: ${hard}` + (findings.length - hard ? ` · unverifiable (other schema): ${findings.length - hard}` : ''));
+const soft = findings.length - hard;
+console.log(`schema: ${TYPES}${typesDate ? ` (dated ${typesDate})` : ''} · ${tables} tables · ${views} views · chains checked: ${chains} · findings: ${hard}` + (soft ? ` · to check by hand (unsupported / other schema): ${soft}` : ''));
 console.log('');
-const order = { MISSING_OBJECT: 0, MISSING_COLUMN: 1, EMBED_UNKNOWN: 2, OTHER_SCHEMA: 3 };
+const order = { MISSING_OBJECT: 0, MISSING_COLUMN: 1, EMBED_UNKNOWN: 2, UNSUPPORTED: 3, OTHER_SCHEMA: 4 };
 for (const f of findings.sort((a, b) => order[a.kind] - order[b.kind] || a.object.localeCompare(b.object) || a.file.localeCompare(b.file))) {
   console.log(`${f.kind.padEnd(15)} ${f.object.padEnd(36)} ${f.file}:${f.line}  ${f.detail}`);
 }
 if (hard) {
   console.log('');
-  console.log('Each MISSING_* is a query PostgREST will reject whole: check whether the error is swallowed (class 10) and whether the types file is older than the object (regenerate the types before filing).');
+  console.log('Each MISSING_* is a query PostgREST will reject whole: check whether the error is swallowed (class 10) and whether the types file is older than the object (regenerate the types before filing). Static scan — a finding is a query to check, not a proven bug.');
 }
-process.exit(hard ? 1 : 0);
+process.exit(exitCode);
