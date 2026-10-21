@@ -81,6 +81,17 @@ test('unbounded: same variable name in different functions does not leak methods
   assert.equal(at(json, 'scopes.ts', 28).kind, 'RANGE');
 });
 
+test('unbounded: a shadowing declaration is another variable; a closure over the outer one still counts', () => {
+  const { json } = runJson(UNBOUNDED, [FX_UNBOUNDED, '--cap', '1000']);
+  assert.equal(at(json, 'shadow.ts', 5).kind, 'UNBOUNDED', 'outer q must not inherit the inner .single()');
+  assert.equal(at(json, 'shadow.ts', 7).kind, 'SINGLE');
+  assert.equal(at(json, 'shadow.ts', 14).kind, 'CONDITIONAL', 'a bound inside a callback is conditional, not ignored');
+  assert.equal(at(json, 'shadow.ts', 21).kind, 'UNBOUNDED', 'the callback declares its own q');
+  assert.equal(at(json, 'shadow.ts', 23).kind, 'LIMIT');
+  assert.equal(at(json, 'shadow.ts', 32).kind, 'UNKNOWN');
+  assert.equal(at(json, 'shadow.ts', 33).kind, 'UNKNOWN');
+});
+
 test('unbounded: storage.from() and Array.from() are not table reads', () => {
   const { json } = runJson(UNBOUNDED, [FX_UNBOUNDED, '--cap', '1000']);
   assert.equal(json.filter((f) => f.file.endsWith('storage.ts')).length, 1);
@@ -114,6 +125,20 @@ test('columns: casts, aliases and JSON paths are not columns; missing ones are r
   assert.deepEqual(lines(37), [], 'view columns come from Views');
   assert.equal(at(json, 'select.ts', 41).kind, 'UNSUPPORTED');
   assert.equal(at(json, 'select.ts', 45).kind, 'OTHER_SCHEMA');
+});
+
+test('columns: a rebound or shadowed variable never yields a MISSING_COLUMN for the wrong table', () => {
+  const dir = path.join('tests', 'fixtures', 'columns-rebound');
+  const { json, code } = runJson(COLUMNS, [dir, '--types', FX_TYPES]);
+  const hard = json.filter((f) => ['MISSING_COLUMN', 'MISSING_OBJECT', 'EMBED_UNKNOWN'].includes(f.kind));
+  assert.deepEqual(hard, [], `no hard finding expected, got ${JSON.stringify(hard)}`);
+  const unknown = json.filter((f) => f.kind === 'UNKNOWN');
+  assert.ok(unknown.length >= 1, 'the unattributed .eq after the rebinding is reported as UNKNOWN');
+  assert.ok(unknown.every((f) => f.file.endsWith('rebound.ts') && f.line <= 9), 'UNKNOWN only for the rebound function, not for the shadowed one');
+  assert.equal(code, 0, 'UNKNOWN is not a hard finding');
+  const text = run(COLUMNS, [dir, '--types', FX_TYPES]);
+  assert.equal(text.code, 0);
+  assert.match(text.out, /UNKNOWN/);
 });
 
 test('columns: text and JSON modes exit with the same code and OTHER_SCHEMA is not a failure', () => {

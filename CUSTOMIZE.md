@@ -70,8 +70,9 @@ clients counted separately.
 
 ## 6. Memory tools
 
-Name the tool and the queries. The skill's phase 1 expects 3–4 semantic queries
-before the first hypothesis. If you have no memory store yet, start one: a
+Name the tool and the queries. The skill's phase 1 queries memory before the
+first hypothesis until it has a relevant answer or can say there is none —
+usually one to four queries, never a fixed count. If you have no memory store yet, start one: a
 folder of postmortems with a consistent header (symptom, root cause,
 resolution, rejected hypotheses, future guidance) is enough for grep.
 

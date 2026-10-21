@@ -10,7 +10,7 @@ INSTRUMENTS <probe → result> … (production read-only, timestamp UTC) | not t
 TRAIL       <screen → service → RPC → table → writer → schedule>; single path: yes/no/not verified
 DIAGNOSIS   <root cause> · confidence: proven/hypothesis · what would disprove it
 TRAP        <test/script> · RED: <output before the fix>
-EXORCISM    <fix> · also hangs on it: <…> · order: migration → code → functions · guarantee in: DB/client
+EXORCISM    <fix> · also hangs on it: <…> · plan: change → compatibility → order → verification → recovery (phase 5) · guarantee in: DB/client
 WATCHDOG    lived <N days> · channel: exists/none/muted · proposal: <…>
 RAID        siblings: <list, or "none found, searched by …">
 RECORD      ticket <id> · project state · memory <type>

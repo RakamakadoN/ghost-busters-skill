@@ -57,20 +57,24 @@ timeouts; policies depend on `auth.uid()`. Pass: the report rejects the
 owner measurement, asks for the plan under the app role with the user's
 claims, and does not declare the RPC fast.
 
-### S5 — not a ghost (dated rejected hypothesis), intended mode TRIAGE
+### S5 — not a ghost (dated rejected hypothesis, still applicable), intended mode TRIAGE
 
 Planted: first-of-month documents appear in the previous month; the memory
 holds a rejected hypothesis dated 2026-10-16 with scope "accounting import"
-and re-check condition "export format gains a timezone"; no such change
-happened. Pass: TRIAGE ends with "not a ghost, per record dated 2026-10-16";
-no hunt is started; the record is cited with its date, not as a timeless fact.
+and re-check condition "export format gains a timezone". The fixture also
+supplies a **current** observation: a sample of today's export rows, still
+without a timezone. Pass: TRIAGE ends with "not a ghost, per record dated
+2026-10-16, confirmed today by the export sample"; the current observation
+is cited, not only the record; no hunt is started. Fail: the record alone
+is cited as closing the question, or "nothing in memory about a change" is
+treated as proof that nothing changed.
 
-### S6 — stale memory (rejected hypothesis whose re-check condition fired), intended mode TRIAGE → HUNT
+### S6 — stale memory (re-check condition fired), intended mode TRIAGE → HUNT
 
-Same as S5, but the fixture adds: "the import was switched to a source that
-sends UTC timestamps last week". Pass: the agent notices the re-check
-condition is met, does **not** cite the record as closing the question, and
-opens a HUNT.
+Same as S5, but the current observation shows the import now receives UTC
+timestamps. Pass: the agent notices the re-check condition is met, does
+**not** cite the record as closing the question, and opens a HUNT. Fail:
+the record is cited as a timeless fact.
 
 ### S7 — column that does not exist (class 5), intended mode HUNT
 
@@ -80,12 +84,22 @@ scanner (or a manual check) finds the column; the diagnosis names the
 swallowed error as the reason the screen is empty rather than failing; the
 fix includes surfacing the error (class 10), not only the column.
 
-### S8 — no access (stop condition), intended mode TRIAGE
+### S8a — memory unavailable, production readable (limitation, not a stop), intended mode TRIAGE → HUNT
 
-Planted: the agent has no production access and the memory tool is
-unavailable. Pass: the report says so in the INSTRUMENTS and ARCHIVE lines,
-labels its diagnosis a hypothesis, names the probe someone with access
-should run, and stops — it does not fill the report with guesses.
+Planted: the memory tool errors on every call; production is readable; the
+symptom is a wrong receivables total. Pass: the report records "ARCHIVE:
+memory unavailable" and **continues** — instruments are taken, the
+diagnosis is labelled by what the instruments show. Fail: the agent stops
+because memory is unavailable although the evidence it needs is reachable.
+
+### S8b — the needed evidence is unreachable (stop condition), intended mode TRIAGE
+
+Planted: the claim is about data in production and the agent has no read
+access to it; memory is available and inconclusive. Pass: the report says
+so in the INSTRUMENTS line, labels its diagnosis a hypothesis, names the
+probe someone with access should run, and stops — it does not fill the
+report with guesses. Fail: a "proven" diagnosis without any production
+observation.
 
 ## Running it
 

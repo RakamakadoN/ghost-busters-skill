@@ -48,7 +48,7 @@ a small check. Pick the mode first and say it in the report.
 
 | Mode | For | What it must contain | Done when |
 |---|---|---|---|
-| **TRIAGE** | "is this worth a hunt?", a quick look, a ticket to sort | the symptom in one line; the archive lookup that answered (or "none"); the one or two key instruments; a verdict labelled *proven* or *hypothesis*; the next step | the next step is named: HUNT, a ticket with class and label, or "not a ghost, because …" with the evidence |
+| **TRIAGE** | "is this worth a hunt?", a quick look, a ticket to sort | the symptom in one line; the archive lookup that answered (or "none"); the one or two key instruments; a verdict labelled *proven* or *hypothesis*; the next step | the next step is named: HUNT, a ticket with class and label, or "not a ghost, per <record dated …>, confirmed today by <current observation>" |
 | **HUNT** | an incident, a wrong number, anything you intend to fix | all phases 0–7 of the hunt below | the diagnosis is *proven*, the trap is GREEN, the exorcism's four lines are written, the watchdog question is answered, the record is made |
 | **RAID** | a confirmed class signature, applied to the whole codebase | the raid report: signature, instruments, the findings table, fixing order, one watchdog | the table is filed as one ticket per class; fixes are separate PRs |
 
@@ -59,14 +59,20 @@ Rules that hold in every mode:
 - **Switch modes explicitly.** TRIAGE that finds a real ghost becomes HUNT;
   HUNT that confirms a class signature spawns RAID; a RAID finding that
   needs understanding goes back to HUNT.
-- **Stop when access runs out.** No production access, no memory tool, no
-  deployed-version listing: write the limitation in the report
-  ("INSTRUMENTS: not taken — no read access") and stop with a hypothesis
-  and a named next step. A report that records its limits is complete; a
+- **Memory sets priorities; observation closes.** The archive decides
+  which probes run first. Closing the current symptom as "not a ghost"
+  needs a current confirmation that the old record still applies: its
+  re-check conditions are checked against today's code, policies, data and
+  deployed versions, not assumed. Finding nothing about a change is not
+  evidence that nothing changed.
+- **Stop only for the missing evidence.** An unavailable memory tool is a
+  limitation to record ("ARCHIVE: memory unavailable"), not a reason to
+  stop, as long as the sources the next conclusion needs are available.
+  Stop — with a hypothesis and the named probe — when the specific evidence
+  the next conclusion or action requires cannot be obtained: no read access
+  to production for a claim about data, no deployed-version listing for a
+  code ≠ production claim. A report that records its limits is complete; a
   report that fills every line with guesses is not.
-- **Stop when the archive has answered.** A dated, scoped rejected
-  hypothesis that matches the symptom and whose re-check conditions are
-  not met ends TRIAGE with "not a ghost, per <record>, dated <date>".
 
 ## The hunt
 
@@ -97,7 +103,8 @@ line means the phase was skipped, not "not needed".
   queries — ticket id + symptom; subsystem + "similar incident root cause";
   the observed behaviour; subsystem + "rejected hypothesis". Stop when a hit
   answers the question; do not run the remaining queries for form. If the
-  tool is unavailable, write that in the report; do not pretend.
+  tool is unavailable, write that in the report and carry on with the other
+  sources; do not pretend, and do not stop for that alone.
 - Project notes, audit and runbook folders for the subsystem.
 - The ticket: current state, "do not repeat".
 
@@ -326,7 +333,7 @@ INSTRUMENTS <probe → result> … (production read-only, timestamp UTC) | not t
 TRAIL       <screen → service → RPC → table → writer → schedule>; single path: yes/no/not verified
 DIAGNOSIS   <root cause> · confidence: proven/hypothesis · what would disprove it
 TRAP        <test/script> · RED: <output before the fix>
-EXORCISM    <fix> · also hangs on it: <…> · order: migration → code → functions · guarantee in: DB/client
+EXORCISM    <fix> · also hangs on it: <…> · plan: change → compatibility → order → verification → recovery (phase 5) · guarantee in: DB/client
 WATCHDOG    lived <N days> · channel: exists/none/muted · proposal: <…>
 RAID        siblings: <list, or "none found, searched by …">
 RECORD      ticket <id> · project state · memory <type>

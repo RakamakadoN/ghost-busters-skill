@@ -116,10 +116,11 @@ npm test
 ```
 
 They pin the classification of plain, whitespace-broken, variable-built,
-conditional and rebound chains, scope separation, non-table `.from()`
-calls, select-list parsing (casts, aliases, JSON paths, embeds, unsupported
-items), missing columns and objects, and exit-code consistency between text
-and JSON modes. `tests/scenarios.md` adds a small set of hunt scenarios with
+conditional and rebound chains, scope separation including nested shadowing
+and closures over an outer variable, non-table `.from()` calls, select-list
+parsing (casts, aliases, JSON paths, embeds, unsupported items), missing
+columns and objects, the column scanner's refusal to attribute methods after
+a rebinding, and exit-code consistency between text and JSON modes. `tests/scenarios.md` adds a small set of hunt scenarios with
 pass criteria for anyone who wants to evaluate the protocol itself.
 
 **4. Limits of the evidence.** There is no benchmark of the protocol across
@@ -140,11 +141,14 @@ node references/scan-select-columns.cjs src \
 (When installed as a skill, prefix the paths with `.claude/skills/ghost-busters/`.)
 
 Both walk every supabase-js `.from(` chain with the TypeScript compiler API,
-follow chains assembled through a variable within the enclosing function
-(grep cannot), and print file:line findings grouped by table. A bound that
-exists on only one control-flow path is reported as CONDITIONAL, a variable
-rebound to another query as UNKNOWN, a literal `.range(0, 999)` as one page
-rather than pagination. The second scanner needs the generated Supabase
+follow chains assembled through a variable by resolving later calls to that
+variable's declaration through lexical scopes (a shadowing `const q` in an
+inner block is another variable; a closure over the outer one still counts),
+and print file:line findings grouped by table. A bound that exists on only
+one control-flow path is reported as CONDITIONAL, a variable bound to two
+different queries as UNKNOWN (the column scanner then checks only the
+direct part of each chain), a literal `.range(0, 999)` as one page rather
+than pagination. The second scanner needs the generated Supabase
 types and prints how old they are. Their analysis limits are listed at the
 top of `references/lib/chains.cjs`; a finding is a call site to check, not a
 proven bug, and a clean scan is not proof of absence.

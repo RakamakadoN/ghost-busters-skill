@@ -19,6 +19,8 @@
  *   EMBED_UNKNOWN    an embedded relation `rel(...)` names no table/view (FK-name embeds are skipped)
  *   UNSUPPORTED      a select item the parser does not understand (quoted identifiers,
  *                    spaces, unbalanced parentheses) — check it by hand, it is NOT a missing column
+ *   UNKNOWN          the chain's variable is bound to more than one query; the methods
+ *                    reached through it are not attributed (only the direct chain was checked)
  *   OTHER_SCHEMA     the object lives in a schema the types file does not cover — unverifiable
  *
  * Understood select syntax: `col`, `alias:col`, `col::cast`, `col->path`,
@@ -34,8 +36,8 @@
  *                                                      schema by a helper the chain cannot show
  *
  * Exit code: 1 when a hard finding (MISSING_OBJECT, MISSING_COLUMN, EMBED_UNKNOWN)
- * exists, else 0 — identical in text and JSON mode. UNSUPPORTED and OTHER_SCHEMA
- * never fail the run. The types directory itself is skipped (it may hold a
+ * exists, else 0 — identical in text and JSON mode. UNSUPPORTED, UNKNOWN and
+ * OTHER_SCHEMA never fail the run. The types directory itself is skipped (it may hold a
  * deliberate `no_such_column` compile-time guard).
  *
  * Requires `typescript` resolvable from the current working directory.
@@ -206,7 +208,16 @@ for (const file of walkSources(srcDir, [path.dirname(TYPES)])) {
       const key = `${sch}.${table}`;
       const obj = schema.get(key);
       const { calls, top } = chainAbove(ts, node);
-      const all = calls.concat(followVariable(ts, top, sf, node).calls);
+      const viaVar = followVariable(ts, top, sf, node);
+      // Direct chain parts are always checked. Methods reached through the
+      // variable are checked only when the variable is bound to this one
+      // query; after a rebinding they may belong to another query, so they
+      // are reported as UNKNOWN instead of being attributed to this table.
+      const all = viaVar.rebound ? calls : calls.concat(viaVar.calls);
+      if (viaVar.rebound && viaVar.calls.length) {
+        const names = [...new Set(viaVar.calls.map((c) => c.name))].join(', ');
+        push(line, key, 'UNKNOWN', `variable "${viaVar.ident}" is bound to more than one query; later calls not attributed: ${names}`);
+      }
       if (!obj) {
         if (!knownSchemas.has(sch)) push(line, key, 'OTHER_SCHEMA', `schema "${sch}" is not in the types file — unverifiable`);
         else push(line, key, 'MISSING_OBJECT', 'not in generated types' + (typesDate ? ` (types dated ${typesDate})` : ''));
@@ -253,9 +264,9 @@ if (AS_JSON) {
 const tables = [...schema.values()].filter((o) => o.kind === 'table').length;
 const views = schema.size - tables;
 const soft = findings.length - hard;
-console.log(`schema: ${TYPES}${typesDate ? ` (dated ${typesDate})` : ''} · ${tables} tables · ${views} views · chains checked: ${chains} · findings: ${hard}` + (soft ? ` · to check by hand (unsupported / other schema): ${soft}` : ''));
+console.log(`schema: ${TYPES}${typesDate ? ` (dated ${typesDate})` : ''} · ${tables} tables · ${views} views · chains checked: ${chains} · findings: ${hard}` + (soft ? ` · to check by hand (unsupported / unknown / other schema): ${soft}` : ''));
 console.log('');
-const order = { MISSING_OBJECT: 0, MISSING_COLUMN: 1, EMBED_UNKNOWN: 2, UNSUPPORTED: 3, OTHER_SCHEMA: 4 };
+const order = { MISSING_OBJECT: 0, MISSING_COLUMN: 1, EMBED_UNKNOWN: 2, UNKNOWN: 3, UNSUPPORTED: 4, OTHER_SCHEMA: 5 };
 for (const f of findings.sort((a, b) => order[a.kind] - order[b.kind] || a.object.localeCompare(b.object) || a.file.localeCompare(b.file))) {
   console.log(`${f.kind.padEnd(15)} ${f.object.padEnd(36)} ${f.file}:${f.line}  ${f.detail}`);
 }
