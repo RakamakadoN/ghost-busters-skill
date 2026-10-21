@@ -2,7 +2,7 @@
 name: ghost-busters
 description: Use when a number, screen, task feed, sync, cron job or report in a CRM/ERP looks wrong or suspiciously quiet — "the total doesn't match the accounting system", "the screen shows 0", "tasks are firing for no reason", "the sync is silent", "tests are green but the page is broken", "nothing arrived", a regression after a fix, any silent failure — and before proposing any fix. Also use for a proactive sweep ("raid") of a module for known ghost classes.
 metadata:
-  version: 1.2.0
+  version: 1.3.0
   origin: distilled from ~60 production incidents in a React + Supabase CRM/ERP
 ---
 
@@ -41,6 +41,39 @@ reviewing a diff (use code review).
 **REQUIRED BACKGROUND:** a systematic-debugging discipline (root cause before
 fixes). Ghost Busters adds what breaks *silently* on top of it.
 
+## Modes and when to stop
+
+The full protocol pays for itself on a real incident and costs too much for
+a small check. Pick the mode first and say it in the report.
+
+| Mode | For | What it must contain | Done when |
+|---|---|---|---|
+| **TRIAGE** | "is this worth a hunt?", a quick look, a ticket to sort | the symptom in one line; the archive lookup that answered (or "none"); the one or two key instruments; a verdict labelled *proven* or *hypothesis*; the next step | the next step is named: HUNT, a ticket with class and label, or "not a ghost, per <record dated …>, confirmed today by <current observation>" |
+| **HUNT** | an incident, a wrong number, anything you intend to fix | all phases 0–7 of the hunt below | the diagnosis is *proven*, the trap is GREEN, the exorcism's four lines are written, the watchdog question is answered, the record is made |
+| **RAID** | a confirmed class signature, applied to the whole codebase | the raid report: signature, instruments, the findings table, fixing order, one watchdog | the table is filed as one ticket per class; fixes are separate PRs |
+
+Rules that hold in every mode:
+
+- **Proven vs hypothesis** is always labelled. A diagnosis without a
+  production observation is a hypothesis in TRIAGE just as in HUNT.
+- **Switch modes explicitly.** TRIAGE that finds a real ghost becomes HUNT;
+  HUNT that confirms a class signature spawns RAID; a RAID finding that
+  needs understanding goes back to HUNT.
+- **Memory sets priorities; observation closes.** The archive decides
+  which probes run first. Closing the current symptom as "not a ghost"
+  needs a current confirmation that the old record still applies: its
+  re-check conditions are checked against today's code, policies, data and
+  deployed versions, not assumed. Finding nothing about a change is not
+  evidence that nothing changed.
+- **Stop only for the missing evidence.** An unavailable memory tool is a
+  limitation to record ("ARCHIVE: memory unavailable"), not a reason to
+  stop, as long as the sources the next conclusion needs are available.
+  Stop — with a hypothesis and the named probe — when the specific evidence
+  the next conclusion or action requires cannot be obtained: no read access
+  to production for a claim about data, no deployed-version listing for a
+  code ≠ production claim. A report that records its limits is complete; a
+  report that fills every line with guesses is not.
+
 ## The hunt
 
 ```
@@ -65,15 +98,25 @@ line means the phase was skipped, not "not needed".
 
 **Mandatory before the first hypothesis**, even when "the meeting is in 30 minutes":
 
-- Engineering memory (vector store, incident notes, postmortems), 3–4 queries:
-  ticket id + symptom; subsystem + "similar incident root cause"; the observed
-  behaviour; subsystem + "rejected hypothesis". If the tool is unavailable,
-  write that in the report; do not pretend.
+- Engineering memory (vector store, incident notes, postmortems). Query until
+  you have a relevant answer or can say there is none: usually one to four
+  queries — ticket id + symptom; subsystem + "similar incident root cause";
+  the observed behaviour; subsystem + "rejected hypothesis". Stop when a hit
+  answers the question; do not run the remaining queries for form. If the
+  tool is unavailable, write that in the report and carry on with the other
+  sources; do not pretend, and do not stop for that alone.
 - Project notes, audit and runbook folders for the subsystem.
 - The ticket: current state, "do not repeat".
 
-**Read REJECTED_HYPOTHESIS entries first.** Keep a list of known non-ghosts
-(see `references/ghost-classes.md`, section "Not ghosts").
+**Read rejected hypotheses first — as leads, not verdicts.** A rejected
+hypothesis is a dated observation: it carries the date and environment, the
+code or schema version if known, the evidence, the scope it applies to, and
+the conditions under which it must be re-checked (see
+`references/ghost-classes.md`, "Not ghosts"). After a change to code,
+policies, data or infrastructure the old conclusion may no longer hold.
+Memory chooses which probes to run first; it never replaces today's
+observation. "Memory says it is not a bug" goes in the report as a lead with
+its date, not as a finding.
 
 ### 2. Instruments — observe before explaining
 
@@ -94,11 +137,29 @@ to production" = report line "INSTRUMENTS: not taken" and the diagnosis is
 labelled "hypothesis". An empty result under row-level security is not proof
 that data is absent.
 
-**Live-role rule.** Row-level security hides plans as well as rows: volume,
-timing and query plan are taken under the screen's role (`set local role
-<app role>`, `explain` only), never under the owner. The owner bypasses RLS,
-so its measurement proves nothing: an RPC "at 3.7 ms" timed out again for
-the user because under RLS the expression index was not used.
+**Live-role rule.** Row-level security hides plans as well as rows, and the
+database owner bypasses it, so a measurement taken as the owner proves
+nothing: an RPC "at 3.7 ms" timed out again for the user because under RLS
+the expression index was not used. Four different checks, not one:
+
+1. **Role privileges** — `has_table_privilege` / `has_function_privilege`
+   for the app role: can it reach the object at all.
+2. **Policies as a specific user** — `set local role <app role>` alone is
+   not the user: policies that read `auth.uid()`, JWT claims or a tenant
+   setting need those settings too (`set local request.jwt.claim.sub = …` /
+   the claims setting your platform's helpers read). Inside a transaction;
+   run it against a local copy or a test database, never as an experiment on
+   production.
+3. **The plan** — `explain` (no `analyze`) under the role and claims above.
+   Look for `Filter:` after the policy sub-plans where an `Index Cond` was
+   expected.
+4. **Timing** — `SET ROLE` does not apply the role's `ALTER ROLE … SET`
+   settings (PostgreSQL docs: that only happens at login), so the role's
+   `statement_timeout` is not in force under `set role`; set it explicitly
+   from `pg_roles.rolconfig` before timing, or read the real numbers from
+   `pg_stat_statements` for that role.
+
+Probe 3.6 in `references/probes.sql` has the read-only template and its limits.
 
 ### 3. Trail — the single proven path
 
@@ -126,14 +187,27 @@ A ghost you cannot catch twice will come back. Before any change:
 
 ### 5. Exorcism — fix with the neighbours in view
 
-Three report lines before editing:
+Four report lines before editing:
 
 1. **What else hangs on this code** — every caller, every screen over the same
    view/RPC, every metric with the same predicate. A regression is the worst
    outcome: "fixed one, broke three" is worse than not fixing.
-2. **Rollout order** — migration to production first, then merge the code;
-   serverless functions and migrations do not deploy by pushing to main;
-   verify the deployed version separately.
+2. **Compatibility plan** — there is no universal rollout order; the order
+   follows the dependency. Write it down as
+   `change → compatibility → order → verification → recovery`:
+   - a compatible schema addition (new column, new view, new function) can
+     go out before the application; a removal or rename needs a staged path
+     (add the new, move the readers, then drop the old);
+   - old and new clients, background jobs and edge/serverless functions are
+     listed separately: a job on the old code may keep writing after the
+     app is new;
+   - how each piece reaches production is a property of the project's
+     CI/CD, not a law — check what pushing to main actually deploys here
+     (see `CUSTOMIZE.md`, "Rollout pipeline");
+   - verification is of the **deployed** versions (function version,
+     migration history, md5 of the body), not of the merge;
+   - recovery names the step that undoes the change if the verification
+     fails.
 3. **Where the guarantee lives** — a data or permission invariant is held by
    the database (trigger, lock, policy), not by the client and not by an edge function.
 4. **What the fix will open** — removing a truncation, a filter or a gate
@@ -181,9 +255,12 @@ is confirmed:
 A raid may be postponed but never lost: if there is no time, the RAID line holds
 the signature and a next step in the tracker, not "didn't run".
 
-**Raid report** — not a hunt report. Twelve findings share one class, one
+**Raid report** — not a hunt report. A dozen findings share one class, one
 trap and one watchdog; each finding's trail is trivial, what matters is "who
-else reads this table". Format proven by the first live raid:
+else reads this table". The scanners in `references/` produce **suspects**:
+a static finding is a call site to check against production (volume, role,
+deployed schema), not a proven bug, and a clean scan does not prove absence.
+Format used in the first live raid:
 
 ```
 GHOST       <class> · search signature (script / SQL) · area
@@ -229,8 +306,10 @@ hunter) run without a human. Their rules:
   lacks gets `ghost-class-new` and a candidate description.
 - ARCHIVE before filing: memory search and a tracker query by symptom, so
   the same ghost is not filed twice.
-- "Not ghosts" from the catalogue are never re-filed: finding the hypothesis
-  there is a reason to stop, not a ticket.
+- A "not ghost" from the catalogue is not re-filed while its re-check
+  conditions are unmet; when they are met (the code, policy, data or
+  infrastructure it depended on has changed), it is re-checked and the
+  record is updated with the new date and evidence.
 - The class-1 pulse (two independent sources per day) is taken on every run:
   a frozen source outranks any other finding of the day.
 
@@ -254,7 +333,7 @@ INSTRUMENTS <probe → result> … (production read-only, timestamp UTC) | not t
 TRAIL       <screen → service → RPC → table → writer → schedule>; single path: yes/no/not verified
 DIAGNOSIS   <root cause> · confidence: proven/hypothesis · what would disprove it
 TRAP        <test/script> · RED: <output before the fix>
-EXORCISM    <fix> · also hangs on it: <…> · order: migration → code → functions · guarantee in: DB/client
+EXORCISM    <fix> · also hangs on it: <…> · plan: change → compatibility → order → verification → recovery (phase 5) · guarantee in: DB/client
 WATCHDOG    lived <N days> · channel: exists/none/muted · proposal: <…>
 RAID        siblings: <list, or "none found, searched by …">
 RECORD      ticket <id> · project state · memory <type>
