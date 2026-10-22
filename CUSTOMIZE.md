@@ -1,6 +1,6 @@
 # Adapting Ghost Busters to your project
 
-The algorithm and the class catalogue are universal. Six foundational things are yours, plus optional v1.4 evidence-gate settings.
+The algorithm and the class catalogue are universal. Six foundational things are yours, plus optional v1.4/v1.6 evidence-gate settings.
 Fill them in once, keep them next to the skill (a `project.md` in the skill
 folder, or your `CLAUDE.md` / `AGENTS.md`), and the hunt stops asking.
 
@@ -95,7 +95,21 @@ A gate that cannot be supplied with valid evidence reports an unknown or
 blocked state. **Never fake `environmentVerified`, `deploymentContainsFix`,
 or `hiddenRecordsReviewed` to silence it.**
 
-## 8. Autonomous Hunter (v1.5) — optional
+## 8. v1.6 evidence-gate integrations (optional)
+
+| Gate | Obtain and compare in private records | Do not infer |
+| --- | --- | --- |
+| Runtime Identity | hosting/deployment provider effective configuration, actual deployed app revision/binding, read-only database identity and anchor; timestamps and separate evidence IDs | matching README settings prove runtime identity |
+| Human Alert | incident detection, generated task, independent provider delivery receipt, named responder ACK, overdue escalation (private records only) | green cron or a database task proves humans were notified |
+| Regression | immutable isolated CI run IDs for RED before the fix and GREEN after, negative controls, reviewed fix revision | a green PR is production recovery or regression coverage |
+
+Adapt the schemes in [references/v1.6-guards.md](references/v1.6-guards.md).
+**Do not publish** project identifiers, private issue links, real customer data,
+phone numbers, deployment settings or provider receipts in the public skill repo.
+The gates compare authorized operator summaries; independent verification of
+source material and production approval remain human responsibilities.
+
+## 9. Autonomous Hunter (v1.5 core; v1.6 modes) — optional
 
 For a private deployment, define each check's approved source, evidence
 freshness expectation, business hours, independent reference signal,
