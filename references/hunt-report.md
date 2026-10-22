@@ -7,6 +7,9 @@ GHOST       <class> · <symptom in one sentence: number, screen, period>
 ARCHIVE     memory: <N entries, key ids> · notes: <files> · ticket: <id, do-not-repeat>
             REJECTED: <what is already disproved and will not be repeated>
 INSTRUMENTS <probe → result> … (production read-only, timestamp UTC) | not taken: <why>
+RUNTIME     <provider + runtime + database observations, sources/times> · status / NOT_RUN
+HUMAN_ALERT <detected → created → delivered → acknowledged, independent channel?> · status / NOT_RUN
+REGRESSION  <isolated RED/ GREEN + negative controls + evidence source> · status / NOT_RUN
 TRAIL       <screen → service → RPC → table → writer → schedule>; single path: yes/no/not verified
 DIAGNOSIS   <root cause> · confidence: proven/hypothesis · what would disprove it
 TRAP        <test/script> · RED: <output before the fix>

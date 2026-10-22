@@ -1,8 +1,8 @@
 {
   "name": "ghost-busters-skill",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "private": true,
-  "description": "Ghost Busters: evidence-driven silent failure investigation with autonomous read-only polling, anomaly deduplication and guarded release checks",
+  "description": "Ghost Busters: evidence-driven silent-failure investigations, v1.6 runtime corroboration, human alert delivery, RED/GREEN and read-only monitoring",
   "license": "MIT",
   "scripts": {
     "test": "node --test tests/*.test.cjs",

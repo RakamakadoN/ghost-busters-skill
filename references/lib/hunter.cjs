@@ -1,17 +1,21 @@
 'use strict';
 
 /**
- * Ghost Busters v1.5 Autonomous Hunter — deterministic transition engine.
+ * Ghost Busters v1.6 Autonomous Hunter — deterministic transition engine.
  * No writes to target apps, no AI side effects, no patch generation. State is
  * only a local summary of alert lifecycle, not production evidence.
  */
 const {assessPulse, assessImpact, assessRelease, assessEnvironment} = require('./guardrails.cjs');
+const {assessRuntimeIdentity,assessHumanAlert,assessRegressionEvidence} = require('./v1-6-gates.cjs');
 
 const evaluators = Object.freeze({
   pulse: assessPulse,
   impact: assessImpact,
   release: assessRelease,
-  environment: assessEnvironment
+  environment: assessEnvironment,
+  'runtime-identity':assessRuntimeIdentity,
+  'human-alert':assessHumanAlert,
+  regression:assessRegressionEvidence
 });
 const MODES = Object.keys(evaluators);
 const ID_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
@@ -86,13 +90,21 @@ function classify(mode, status) {
     pulse:['SUSPECTED_SILENT_FAILURE','EXECUTION_FAILURE','EVIDENCE_ERROR'],
     impact:['BLOCKED','EVIDENCE_ERROR'],
     release:['BLOCKED','EVIDENCE_ERROR'],
-    environment:['MISMATCH','UNSAFE_ACCESS','EVIDENCE_ERROR']
+    environment:['MISMATCH','UNSAFE_ACCESS','EVIDENCE_ERROR'],
+    'runtime-identity':['MISMATCH','UNSAFE_ACCESS','STALE_EVIDENCE','EVIDENCE_ERROR'],
+    'human-alert':['DEPENDENT_CHANNEL','ALERT_MISSING','DELIVERY_OVERDUE','DELIVERY_UNVERIFIED',
+      'ACK_OVERDUE','ACK_UNVERIFIED','ACKNOWLEDGED_LATE','EVIDENCE_ERROR'],
+    regression:['UNSAFE_TEST_ENVIRONMENT','NO_RED_BASELINE','POST_FIX_FAILURE',
+      'CONTROL_FAILURE','EVIDENCE_ERROR']
   };
   const healthy = {
     pulse:['PROGRESS_OBSERVED'],
     impact:['CLEAR'],
     release:['VERIFIED_IN_PRODUCTION'],
-    environment:['VERIFIED_CANDIDATE']
+    environment:['VERIFIED_CANDIDATE'],
+    'runtime-identity':['CORROBORATED_CANDIDATE'],
+    'human-alert':['ACKNOWLEDGED'],
+    regression:['RED_GREEN_RECORDED']
   };
   if (risks[mode]?.includes(status)) return 'BAD';
   if (healthy[mode]?.includes(status)) return 'GOOD';
@@ -124,6 +136,15 @@ function summarise(result) {
       expectedDataPresent:result.checks.expectedDataPresent,
       readOnly:result.checks.accessReadOnly};
   }
+  if (result.tool === 'runtime-identity') {
+    return {channels:result.observed.channels,...result.checks};
+  }
+  if (result.tool === 'human-alert') {
+    return result.observed;
+  }
+  if (result.tool === 'regression') {
+    return result.observed;
+  }
   return {};
 }
 function sampleEvidence(mode, observation, now, maxAge) {
@@ -133,12 +154,12 @@ function sampleEvidence(mode, observation, now, maxAge) {
   try {
     // A successful retrieval of an old snapshot is not a fresh observation.
     // Pulse summaries contain their own source observation timestamp.
-    if (mode === 'pulse') {
+    if (['pulse','runtime-identity','human-alert','regression'].includes(mode)) {
       const stamp = Date.parse(observation.evaluatedAt);
       const age = Date.parse(now)-stamp;
       if (!Number.isFinite(stamp) || age < -5*60000 || age > maxAge*60000) {
         return {status:'EVIDENCE_ERROR',metrics:{},
-          note:'Pulse evidence is stale, future-dated or missing a timestamp'};
+          note:'Evaluation evidence is stale, future-dated or missing a timestamp'};
       }
     }
     const result = evaluators[mode](observation);

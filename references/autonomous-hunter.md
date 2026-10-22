@@ -1,16 +1,16 @@
-# Ghost Busters v1.5 — Autonomous Hunter (read-only)
+# Ghost Busters v1.6 — Autonomous Hunter (read-only)
 
 **Status:** functional local runner and **opt-in private GitHub Actions scheduling template**. No live customer deployment or continuously running production monitor is enabled in the public skill repository. Connecting a real environment requires its owner's private read-only evidence collector and deployment settings.
 
-v1.5 adds a deterministic evidence collection and **stateful alert lifecycle** on top of the v1.4 Pulse, Impact, Release, and Environment evaluators. It does not replace the 8-phase investigative skill, generate patches, run SQL, or perform remediation.
+v1.5 introduced the deterministic evidence collector and **stateful alert lifecycle** on top of Pulse, Impact, Release and Environment. v1.6 also evaluates Runtime Identity, Human Alert and Regression evidence. It does not replace the 8-phase investigative skill, generate patches, run SQL, or perform remediation.
 
 ## What it does
 
-1. Loads a strictly defined config with 1–30 checks, one of four v1.4 modes each.
+1. Loads a strictly defined config with 1–30 checks, one of the four original or three new v1.6 modes.
 2. Fetches a **prepared aggregate JSON evidence document** for each check:
    - `file` (local fixture or local private export, restricted to config directory); or
    - `https` (GET only, explicit DNS-host allowlist, TLS, optional bearer token from environment, no redirects).
-3. Evaluates it with the existing v1.4 rules.
+3. Evaluates it against one of the seven offline gate rules.
 4. Tracks `BAD`, `GOOD`, and `UNKNOWN` across runs in a local JSON state.
 5. Opens an alert after **two consecutive bad** evaluations by default; resolves after **two consecutive good** evaluations.
 6. Reports `OPENED` and `RECOVERED` **once per lifecycle**, and records continuing incidents without repeating the alert.
@@ -60,7 +60,7 @@ Begin with [examples/hunter.live.example.json](../examples/hunter.live.example.j
 - `checks[].source.tokenEnv`: environment-variable name beginning with `GHOST_HUNTER_`, such as `GHOST_HUNTER_TOKEN`, passed to the process by its secure host.
 - `openAfter`, `resolveAfter`: 1–20 successive observations (default 2).
 
-The endpoint **must be provided by the customer/operator** and serve the appropriate input shape in [v1.4-guards.md](./v1.4-guards.md). The tool does not create that endpoint or provision access. Prefer a strictly read-only, row-restricted database/view/service credential. Never use Supabase `service_role`, credentials embedded in public URLs, or a token permitting writes as a monitoring token.
+The endpoint **must be provided by the customer/operator** and serve the appropriate input shape in [v1.4-guards.md](./v1.4-guards.md) or [v1.6-guards.md](./v1.6-guards.md). The tool does not create that endpoint or provision access. Prefer a strictly read-only, row-restricted database/view/service credential. Never use Supabase `service_role`, credentials embedded in public URLs, or a token permitting writes as a monitoring token.
 
 ### Recommended schedule: every four hours in a private repository
 
@@ -83,11 +83,11 @@ The template:
 
 - HTTP: only GET, TLS, exact allowlisted hosts, no redirects or URL credentials, 12-second timeout per check, 256 KiB maximum per response.
 - Files: relative paths only, canonical-path containment within the config directory, 256 KiB maximum.
-- The collector cannot prove data came from the correct production system; verify environment identity using v1.4's Environment gate and independent deployment evidence.
+- The collector cannot prove data came from the correct production system. Use v1.6 Runtime Identity to compare operator-supplied deployment provider, actual runtime and read-only database observations, but independently inspect their private evidence before trusting the conclusion.
 - A generated JSON report is an assessment of operator-provided evidence, not a diagnosis or validated fix.
 - Evidence errors cause a candidate alert after the configured confirmation threshold: persistent loss of monitoring is itself a problem.
 - Schedule delays and cache evictions may produce gaps or re-opened alerts. GitHub Actions is not a low-latency incident paging system.
-- The process does not continue running after completing a run. Continuous operation requires the private workflow, a separate trusted scheduler, or manual invocation.
+- The process does not continue running after completing a run. The v1.6 Human Alert gate only evaluates recorded delivery/ACK evidence; **this program never sends or verifies a real page to a human**. Continuous operation requires the private workflow, a separate trusted scheduler, or manual invocation.
 
 ## Status transitions
 

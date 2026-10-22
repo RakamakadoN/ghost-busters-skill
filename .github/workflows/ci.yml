@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   regression:
-    name: Scanner + v1.5 Autonomous Hunter Tests
+    name: Scanner + v1.6 Evidence Gates + Autonomous Hunter Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -32,5 +32,8 @@ jobs:
           node references/ghost-guard.cjs impact --input examples/impact-blocked.json --json
           node references/ghost-guard.cjs release --input examples/release-unverified.json --json
           node references/ghost-guard.cjs environment --input examples/environment-mismatch.json --json
+          node references/ghost-guard.cjs runtime-identity --input examples/runtime-corroborated.json --json --strict
+          node references/ghost-guard.cjs human-alert --input examples/human-alert-overdue.json --json
+          node references/ghost-guard.cjs regression --input examples/regression-recorded.json --json --strict
       - name: Autonomous Hunter synthetic two-run demonstration
         run: node references/hunter-demo.cjs
