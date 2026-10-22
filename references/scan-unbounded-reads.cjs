@@ -101,7 +101,7 @@ function classify(calls, rebound) {
   return { kind: 'UNBOUNDED' };
 }
 
-const AT_RISK = (f) => f.kind === 'UNBOUNDED' || f.kind === 'CONDITIONAL' || f.kind === 'UNKNOWN' || f.kind === 'RANGE_SINGLE' || f.kind === 'DYNAMIC_TABLE' || !!f.falseCeiling || !!f.uncertainBound || !!f.paginationUnverified;
+const AT_RISK = (f) => f.kind === 'UNBOUNDED' || f.kind === 'CONDITIONAL' || f.kind === 'UNKNOWN' || f.kind === 'RANGE_SINGLE' || f.kind === 'DYNAMIC_TABLE' || f.kind === 'EARLY_EXECUTION' || !!f.falseCeiling || !!f.uncertainBound || !!f.paginationUnverified;
 
 const findings = [];
 for (const file of walkSources(srcDir)) {
@@ -115,6 +115,13 @@ for (const file of walkSources(srcDir)) {
       const viaVar = followVariable(ts, top, sf, node);
       const all = calls.concat(viaVar.calls);
       const cls = classify(all, viaVar.rebound);
+      const beforeBound = (viaVar.executions || []).some((pos) =>
+        !all.some((c) => !c.conditional && (BOUNDING.has(c.name) || headSelect(c)) && c.node.getStart(sf) < pos)
+      );
+      if (beforeBound && cls.kind !== 'WRITE' && cls.kind !== 'NOSELECT' && cls.kind !== 'UNKNOWN') {
+        cls.kind = 'EARLY_EXECUTION';
+        cls.note = 'await/then observed before an unconditional row bound; review execution order';
+      }
       if (isDynamicTableFrom(ts, node) && cls.kind !== 'WRITE' && cls.kind !== 'NOSELECT') {
         cls.kind = 'DYNAMIC_TABLE';
         cls.note = 'nonliteral table name; verify query target';
@@ -152,7 +159,7 @@ if (AS_JSON) {
   process.exit(exitCode);
 }
 
-const rank = { UNBOUNDED: 0, CONDITIONAL: 1, UNKNOWN: 2, RANGE_SINGLE: 3, LIMIT: 4, RANGE: 5, SINGLE: 6, HEAD: 7, WRITE: 8 };
+const rank = { EARLY_EXECUTION: 0, UNBOUNDED: 0, CONDITIONAL: 1, UNKNOWN: 2, RANGE_SINGLE: 3, LIMIT: 4, RANGE: 5, SINGLE: 6, HEAD: 7, WRITE: 8 };
 const byTable = new Map();
 for (const f of out) {
   if (!byTable.has(f.table)) byTable.set(f.table, []);
