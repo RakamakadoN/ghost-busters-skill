@@ -20,6 +20,17 @@ v1.5 adds a deterministic evidence collection and **stateful alert lifecycle** o
 
 ## Local smoke test (fully synthetic)
 
+For a reusable test that works on any date and automatically simulates two
+observations with fresh synthetic timestamps:
+
+```bash
+node references/hunter-demo.cjs
+```
+
+This creates only `.ghost-hunter/synthetic-demo/` and never reads credentials
+or reaches an external system.
+
+
 Node.js 20+ required; no package install needed for the runtime.
 
 ```bash
