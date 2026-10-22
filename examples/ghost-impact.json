@@ -1,0 +1,52 @@
+{
+  "change": "Uncap synthetic queue",
+  "action": "bulk-message",
+  "before": {
+    "context": {
+      "environment": "synthetic-test",
+      "role": "operator",
+      "query": "outstanding_notices"
+    },
+    "ids": [
+      "old-1",
+      "old-2"
+    ]
+  },
+  "after": {
+    "context": {
+      "environment": "synthetic-test",
+      "role": "operator",
+      "query": "outstanding_notices"
+    },
+    "ids": [
+      "old-1",
+      "old-2",
+      "new-1",
+      "new-2",
+      "new-3"
+    ]
+  },
+  "records": [
+    {
+      "id": "new-1",
+      "stale": false,
+      "actionable": true
+    },
+    {
+      "id": "new-2",
+      "stale": true,
+      "actionable": true
+    },
+    {
+      "id": "new-3",
+      "stale": true,
+      "actionable": false
+    }
+  ],
+  "dependencies": [
+    {
+      "id": "stale-notice-cleanup",
+      "satisfied": false
+    }
+  ]
+}
