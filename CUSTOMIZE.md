@@ -95,6 +95,22 @@ A gate that cannot be supplied with valid evidence reports an unknown or
 blocked state. **Never fake `environmentVerified`, `deploymentContainsFix`,
 or `hiddenRecordsReviewed` to silence it.**
 
+## 8. Autonomous Hunter (v1.5) — optional
+
+For a private deployment, define each check's approved source, evidence
+freshness expectation, business hours, independent reference signal,
+consecutive-failure threshold and escalation contact. Save the private
+configuration alongside the private scheduler, not in this public repo.
+
+The public runtime only supports explicit local JSON or read-only HTTPS GET
+of **pre-aggregated evidence**. You must independently provision the collector
+under least-privilege credentials, verify the deployed environment, and
+decide who receives private workflow alerts. See
+[references/autonomous-hunter.md](references/autonomous-hunter.md).
+
+The default public GitHub Actions workflow is a **synthetic demo**.
+Do not infer an enabled production watchdog from a green synthetic test.
+
 ## Stack notes
 
 - **Supabase / PostgREST**: class 3 (row cap 1000, order without a unique

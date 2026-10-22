@@ -2,7 +2,7 @@
 name: ghost-busters
 description: Use when a number, screen, task feed, sync, cron job or report in a CRM/ERP looks wrong or suspiciously quiet — "the total doesn't match the accounting system", "the screen shows 0", "tasks are firing for no reason", "the sync is silent", "tests are green but the page is broken", "nothing arrived", a regression after a fix, any silent failure — and before proposing any fix. Also use for a proactive sweep ("raid") of a module for known ghost classes.
 metadata:
-  version: 1.4.0
+  version: 1.5.0
   origin: distilled from ~60 production incidents in a React + Supabase CRM/ERP
 ---
 
@@ -51,6 +51,7 @@ a small check. Pick the mode first and say it in the report.
 | **TRIAGE** | "is this worth a hunt?", a quick look, a ticket to sort | the symptom in one line; the archive lookup that answered (or "none"); the one or two key instruments; a verdict labelled *proven* or *hypothesis*; the next step | the next step is named: HUNT, a ticket with class and label, or "not a ghost, per <record dated …>, confirmed today by <current observation>" |
 | **HUNT** | an incident, a wrong number, anything you intend to fix | all phases 0–7 of the hunt below | the diagnosis is *proven*, the trap is GREEN, the exorcism's four lines are written, the watchdog question is answered, the record is made |
 | **RAID** | a confirmed class signature, applied to the whole codebase | the raid report: signature, instruments, the findings table, fixing order, one watchdog | the table is filed as one ticket per class; fixes are separate PRs |
+| **AUTONOMOUS** | repeated read-only checks using an approved private collector/scheduler | a configured evidence adapter, stateful alert history, aggregate report, and a human-facing escalation path | a run records good/bad/unknown, changes of alert state, and never alters any target system |
 
 Rules that hold in every mode:
 
@@ -110,6 +111,42 @@ to separate observed incidents, reproductions, deployment proof and independent
 review, without exposing a customer's private data. For finance-specific
 invariants, see [references/finance-invariants.md](references/finance-invariants.md);
 they are optional project-specific templates, not tax or financial advice.
+
+## Autonomous Hunter — v1.5 (optional, read-only)
+
+v1.5 adds a **deterministic runner**, not an autonomous repair agent. It
+uses the existing v1.4 Pulse, Impact, Release, and Environment evidence gates
+on **authorized pre-aggregated JSON** from a restricted local file or
+explicitly allowlisted HTTPS GET endpoint. An external private scheduler
+(e.g. a four-hour GitHub Actions job) runs it repeatedly. It writes local
+state and aggregate reports; it cannot perform SQL writes, change code,
+trigger deployment, send messages or interact with customers.
+
+```bash
+node references/ghost-hunter.cjs \
+  --config examples/hunter.config.json \
+  --state .ghost-hunter/state.json \
+  --report .ghost-hunter/report.json \
+  --markdown .ghost-hunter/report.md
+```
+
+**Alert lifecycle:** BAD for two consecutive runs → OPENED; continuing BAD →
+record only (no duplicate alert); GOOD for two runs → RECOVERED; UNKNOWN or
+missing/stale evidence never closes an open incident. Thresholds are
+configurable. An EVIDENCE_ERROR indicates the monitoring mechanism could not
+assess the data; it is not proof of a production defect.
+
+**Safety boundary:** never run real private collectors, credentials or reports
+from this public skill repository. See
+[references/autonomous-hunter.md](references/autonomous-hunter.md) for the
+separate private scheduler and restrictions. No real system is monitored
+until its operator configures that private integration. The public synthetic
+workflow is a test, not a deployed watchdog.
+
+**Escalation:** A new signal is a TRIAGE lead. A human or explicitly
+authorized investigation should confirm source ownership, environment,
+timestamps, scope and root cause using the eight phases. Do not auto-edit
+code or production from the alert.
 
 ## The hunt
 

@@ -1,12 +1,13 @@
 {
   "name": "ghost-busters-skill",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
-  "description": "Evidence-driven silent failure investigation for Claude Code, with AST scanners and offline Pulse/Impact/Release/Environment guards",
+  "description": "Ghost Busters: evidence-driven silent failure investigation with autonomous read-only polling, anomaly deduplication and guarded release checks",
   "license": "MIT",
   "scripts": {
     "test": "node --test tests/*.test.cjs",
-    "test:guards": "node --test tests/guardrails.test.cjs"
+    "test:guards": "node --test tests/guardrails.test.cjs",
+    "test:hunter": "node --test tests/hunter.test.cjs"
   },
   "devDependencies": {
     "typescript": "^5.6.0"

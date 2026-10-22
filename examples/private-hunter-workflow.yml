@@ -1,0 +1,75 @@
+# COPY THIS FILE INTO A PRIVATE REPOSITORY:
+#   .github/workflows/ghost-hunter.yml
+# DO NOT RUN PRODUCTION COLLECTORS IN A PUBLIC REPOSITORY.
+# Set secrets.GHOST_HUNTER_TOKEN to a read-only collector token (never
+# Supabase service_role), and add a private hunter.config.json at repo root.
+# Replace PIN_REVIEWED_SHA with the audited Ghost Busters v1.5 commit SHA.
+name: Ghost Busters Private Autonomous Hunter
+
+on:
+  schedule:
+    - cron: '17 */4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ghost-hunter-private
+  cancel-in-progress: false
+
+jobs:
+  hunter:
+    if: github.event.repository.private == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out private configuration
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check out pinned public Ghost Busters tool
+        uses: actions/checkout@v4
+        with:
+          repository: RakamakadoN/ghost-busters-skill
+          ref: PIN_REVIEWED_SHA
+          path: .tools/ghost-busters
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Restore state from latest run
+        uses: actions/cache/restore@v4
+        with:
+          path: .ghost-hunter/state.json
+          key: ghost-hunter-state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ghost-hunter-state-
+      - name: Analyze read-only aggregate evidence
+        env:
+          GHOST_HUNTER_TOKEN: ${{ secrets.GHOST_HUNTER_TOKEN }}
+        run: |
+          test -f hunter.config.json
+          node .tools/ghost-busters/references/ghost-hunter.cjs \
+            --config hunter.config.json \
+            --state .ghost-hunter/state.json \
+            --report .ghost-hunter/report.json \
+            --markdown .ghost-hunter/report.md
+      - name: Attach sanitized report to this run
+        run: cat .ghost-hunter/report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload private run report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghost-hunter-report
+          path: |
+            .ghost-hunter/report.json
+            .ghost-hunter/report.md
+          retention-days: 14
+      - name: Save state for the next run
+        uses: actions/cache/save@v4
+        with:
+          path: .ghost-hunter/state.json
+          key: ghost-hunter-state-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Announce only NEW incidents, not recurring existing alerts
+        run: |
+          node -e "const r=require('./.ghost-hunter/report.json');if(r.summary.new>0){console.error('Ghost Busters detected '+r.summary.new+' new incident(s). Check the private job summary.');process.exitCode=1;}"

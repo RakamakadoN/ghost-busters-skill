@@ -1,9 +1,9 @@
 # Ghost Busters
 
-**A debugging skill for hunting bugs that never crash.** — **v1.4.0**
+**A debugging skill for hunting bugs that never crash.** — **v1.5.0**
 
 Originally developed for Claude Code, Ghost Busters provides a reusable investigation
-protocol, standalone Node.js scanners, and offline evidence-gated checks. The protocol can also guide OpenAI Codex
+protocol, standalone Node.js scanners, offline evidence gates, and a read-only monitoring runner. The protocol can also guide OpenAI Codex
 sessions when its instructions and project-specific context are supplied; a native
 Codex integration has not yet been verified.
 
@@ -28,15 +28,45 @@ ghost-busters/
 │   ├── scan-unbounded-reads.cjs AST scan: supabase-js reads without paging (class 3 signature)
 │   ├── scan-select-columns.cjs  AST scan: selected/filtered columns vs generated types (class 5)
 │   ├── ghost-guard.cjs         offline CLI: pulse / impact / release / environment
+│   ├── ghost-hunter.cjs        v1.5 stateful read-only runner
+│   ├── autonomous-hunter.md    private deployment guide
 │   ├── v1.4-guards.md          input formats, statuses, safety rules, reproduction
 │   ├── evidence-ledger.md      incident evidence tiers and benchmark protocol
 │   ├── finance-invariants.md   opt-in finance invariants (templates only)
 │   └── lib/                   AST chain walker + pure guardrail evaluators
-├── examples/                    synthetic/redacted summaries (never production exports)
+├── examples/                    synthetic examples and private scheduler template
 ├── tests/                       scanner + evidence-gate regressions, hunt scenarios
 ├── CUSTOMIZE.md                 the six things that are yours to fill in
 └── LICENSE                      MIT
 ```
+
+## New in v1.5 — Autonomous Hunter
+
+Ghost Busters now includes a deterministic runner for repeated, **read-only**
+evaluation of the four v1.4 gates. It collects aggregate JSON from permitted
+local files or specifically allowlisted HTTPS endpoints, tracks consecutive
+bad and good observations, and only reports **new incidents and recoveries**.
+Missing or stale evidence cannot make an active incident look healthy.
+
+Run the synthetic sample:
+
+```bash
+node references/ghost-hunter.cjs --config examples/hunter.config.json \
+  --state .ghost-hunter/state.json \
+  --report .ghost-hunter/report.json \
+  --markdown .ghost-hunter/report.md
+```
+
+Run it twice to open a synthetic incident. The sample does not represent
+any live deployment.
+
+**Production monitoring is not enabled in this public repository.**
+The four-hour [private scheduler template](examples/private-hunter-workflow.yml)
+can be installed in an operator-controlled private repository, connected to
+a separately configured read-only evidence source.
+
+[Full setup, safety restrictions, and alert lifecycle](references/autonomous-hunter.md).
+[Manual synthetic Actions demo](.github/workflows/hunter-demo.yml).
 
 ## What's new in v1.4.0
 
