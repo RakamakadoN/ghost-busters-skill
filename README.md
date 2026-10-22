@@ -1,6 +1,6 @@
 # Ghost Busters
 
-**A debugging skill for hunting bugs that never crash.** — **v1.4.0**
+**A debugging skill for hunting bugs that never crash.** — **v1.5.0**
 
 Originally developed for Claude Code, Ghost Busters provides a reusable investigation
 protocol, standalone Node.js scanners, and offline evidence-gated checks. The protocol can also guide OpenAI Codex
