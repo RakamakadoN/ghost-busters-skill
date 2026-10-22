@@ -118,7 +118,7 @@ for (const file of walkSources(srcDir)) {
       const beforeBound = (viaVar.executions || []).some((pos) =>
         !all.some((c) => !c.conditional && (BOUNDING.has(c.name) || headSelect(c)) && c.node.getStart(sf) < pos)
       );
-      if (beforeBound && cls.kind !== 'WRITE' && cls.kind !== 'NOSELECT' && cls.kind !== 'UNKNOWN') {
+      if (beforeBound && ['LIMIT', 'SINGLE', 'HEAD'].includes(cls.kind)) {
         cls.kind = 'EARLY_EXECUTION';
         cls.note = 'await/then observed before an unconditional row bound; review execution order';
       }
