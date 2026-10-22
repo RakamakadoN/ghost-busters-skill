@@ -82,6 +82,15 @@ test('first missing observation is a potential alert, not healthy',()=>{
  assert.equal(x.report.checks[0].classification,'BAD');
  assert.equal(x.report.summary.open,0);
 });
+test('stale pulse evidence cannot be replayed as a current success or failure',()=>{
+ const x=step(initialState(),source,'2026-10-24T17:00:00Z');
+ assert.equal(x.report.checks[0].status,'EVIDENCE_ERROR');
+ assert.match(x.report.checks[0].note,/stale/);
+});
+test('future-dated evidence is not valid telemetry',()=>{
+ const x=step(initialState(),source,'2026-10-21T08:00:00Z');
+ assert.equal(x.report.checks[0].status,'EVIDENCE_ERROR');
+});
 test('unknown status does not auto-clear an incident',()=>{
  const open=step(step(initialState(),source,T0).state,source,T1);
  const uncertain=structuredClone(source);
