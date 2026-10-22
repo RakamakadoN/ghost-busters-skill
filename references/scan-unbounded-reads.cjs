@@ -32,10 +32,10 @@
 
 const fs = require('fs');
 const path = require('path');
-const { loadTypescript, walkSources, literalText, isTableFrom, isDynamicTableFrom, chainAbove, followVariable } = require('./lib/chains.cjs');
+const { loadTypescript, walkSources, literalText, isTableFrom, isDynamicTableFrom, fromReceiverRoot, chainAbove, followVariable } = require('./lib/chains.cjs');
 
 const args = process.argv.slice(2);
-const VALUE_OPTS = new Set(['--cap', '--table']);
+const VALUE_OPTS = new Set(['--cap', '--table', '--client-root']);
 const flag = (name) => args.includes(name);
 const opt = (name, def) => {
   const i = args.indexOf(name);
@@ -44,6 +44,7 @@ const opt = (name, def) => {
 const srcDir = args.find((a, i) => !a.startsWith('--') && !(i > 0 && VALUE_OPTS.has(args[i - 1]))) || 'src';
 const CAP = Number(opt('--cap', '1000'));
 const ONLY_TABLE = opt('--table', null);
+const CLIENT_ROOTS = args.flatMap((arg,i) => arg === '--client-root' && args[i+1] ? [args[i+1]] : []);
 const SHOW_WRITES = flag('--writes');
 const AS_JSON = flag('--json');
 const STRICT = flag('--strict');
@@ -107,7 +108,8 @@ for (const file of walkSources(srcDir)) {
   const text = fs.readFileSync(file, 'utf8');
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const visit = (node) => {
-    if (isTableFrom(ts, node) || isDynamicTableFrom(ts, node)) {
+    if ((isTableFrom(ts, node) || isDynamicTableFrom(ts, node)) &&
+        (!CLIENT_ROOTS.length || CLIENT_ROOTS.includes(fromReceiverRoot(ts, node)))) {
       const table = literalText(ts, node.arguments[0]);
       const { calls, top } = chainAbove(ts, node);
       const viaVar = followVariable(ts, top, sf, node);
