@@ -1,6 +1,6 @@
 # Ghost Busters
 
-**A debugging skill for hunting bugs that never crash.** — **v1.5.0**
+**A debugging skill for hunting bugs that never crash.** — **v1.6.0**
 
 Originally developed for Claude Code, Ghost Busters provides a reusable investigation
 protocol, standalone Node.js scanners, offline evidence gates, and a read-only monitoring runner. The protocol can also guide OpenAI Codex
@@ -27,10 +27,11 @@ ghost-busters/
 │   ├── hunt-report.md           report template + a worked example
 │   ├── scan-unbounded-reads.cjs AST scan: supabase-js reads without paging (class 3 signature)
 │   ├── scan-select-columns.cjs  AST scan: selected/filtered columns vs generated types (class 5)
-│   ├── ghost-guard.cjs         offline CLI: pulse / impact / release / environment
-│   ├── ghost-hunter.cjs        v1.5 stateful read-only runner
+│   ├── ghost-guard.cjs         offline CLI: seven evidence gates
+│   ├── ghost-hunter.cjs        v1.6 compatible stateful read-only runner
 │   ├── autonomous-hunter.md    private deployment guide
-│   ├── v1.4-guards.md          input formats, statuses, safety rules, reproduction
+│   ├── v1.4-guards.md          original four evidence gates
+│   ├── v1.6-guards.md          runtime identity, human alert and RED/GREEN
 │   ├── evidence-ledger.md      incident evidence tiers and benchmark protocol
 │   ├── finance-invariants.md   opt-in finance invariants (templates only)
 │   └── lib/                   AST chain walker + pure guardrail evaluators
@@ -40,10 +41,37 @@ ghost-busters/
 └── LICENSE                      MIT
 ```
 
+## New in v1.6 — close three evidence gaps
+
+Three new **offline, read-only evidence gates** were introduced after real
+incident reporting exposed important uncertainty that a green job does not resolve:
+
+- **Runtime Identity:** compare separately collected deployment provider,
+  live runtime and read-only database evidence including artifact identity,
+  freshness and nonempty data anchor. Output is **CORROBORATED_CANDIDATE**,
+  never independent proof of a provider API query.
+- **Human Alert:** check detection, alert creation, provider delivery,
+  human acknowledgement and channel independence. A stored urgent ticket
+  is not proof anyone was notified.
+- **Regression:** inspect recorded RED-before-GREEN runs and negative controls
+  from an isolated test environment; don't mistake a claimed green result
+  for a test actually executed by the tool.
+
+```bash
+node references/ghost-guard.cjs runtime-identity --input examples/runtime-corroborated.json --strict
+node references/ghost-guard.cjs human-alert --input examples/human-alert-overdue.json --json
+node references/ghost-guard.cjs regression --input examples/regression-recorded.json --strict
+npm test
+```
+
+[Full v1.6 schemas and limitations](references/v1.6-guards.md).
+All examples are synthetic, and **none** transmit notifications or touch
+a customer system. Existing four gates and Hunter configurations still work.
+
 ## New in v1.5 — Autonomous Hunter
 
 Ghost Busters now includes a deterministic runner for repeated, **read-only**
-evaluation of the four v1.4 gates. It collects aggregate JSON from permitted
+evaluation of the four v1.4 gates and three optional v1.6 gates. It collects aggregate JSON from permitted
 local files or specifically allowlisted HTTPS endpoints, tracks consecutive
 bad and good observations, and only reports **new incidents and recoveries**.
 Missing or stale evidence cannot make an active incident look healthy.
@@ -183,7 +211,7 @@ read-only, same tool budget, with both transcripts summarised:
 It is a single pair of runs on one scenario: a worked example of what the
 protocol changes, not a measurement of how often.
 
-**3. Reproducible tests (run them).** The two scanners and the v1.4 evidence gates have regression tests on small local fixtures, no database needed:
+**3. Reproducible tests (run them).** The two scanners and all seven evidence gates have regression tests on small local fixtures, no database needed:
 
 ```bash
 npm install

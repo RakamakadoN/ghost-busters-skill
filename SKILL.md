@@ -2,7 +2,7 @@
 name: ghost-busters
 description: Use when a number, screen, task feed, sync, cron job or report in a CRM/ERP looks wrong or suspiciously quiet — "the total doesn't match the accounting system", "the screen shows 0", "tasks are firing for no reason", "the sync is silent", "tests are green but the page is broken", "nothing arrived", a regression after a fix, any silent failure — and before proposing any fix. Also use for a proactive sweep ("raid") of a module for known ghost classes.
 metadata:
-  version: 1.5.0
+  version: 1.6.0
   origin: distilled from ~60 production incidents in a React + Supabase CRM/ERP
 ---
 
@@ -49,7 +49,7 @@ a small check. Pick the mode first and say it in the report.
 | Mode | For | What it must contain | Done when |
 |---|---|---|---|
 | **TRIAGE** | "is this worth a hunt?", a quick look, a ticket to sort | the symptom in one line; the archive lookup that answered (or "none"); the one or two key instruments; a verdict labelled *proven* or *hypothesis*; the next step | the next step is named: HUNT, a ticket with class and label, or "not a ghost, per <record dated …>, confirmed today by <current observation>" |
-| **HUNT** | an incident, a wrong number, anything you intend to fix | all phases 0–7 of the hunt below | the diagnosis is *proven*, the trap is GREEN, the exorcism's four lines are written, the watchdog question is answered, the record is made |
+| **HUNT** | an incident, a wrong number, anything you intend to fix | all phases 0–7 of the hunt below | a proven diagnosis **or explicit unresolved hypothesis**, documented RED/GREEN results **or NOT_RUN with blockers**, exorcism/impact plan, human alert path, and record; never confuse report completion with a deployed fix |
 | **RAID** | a confirmed class signature, applied to the whole codebase | the raid report: signature, instruments, the findings table, fixing order, one watchdog | the table is filed as one ticket per class; fixes are separate PRs |
 | **AUTONOMOUS** | repeated read-only checks using an approved private collector/scheduler | a configured evidence adapter, stateful alert history, aggregate report, and a human-facing escalation path | a run records good/bad/unknown, changes of alert state, and never alters any target system |
 
@@ -75,11 +75,12 @@ Rules that hold in every mode:
   code ≠ production claim. A report that records its limits is complete; a
   report that fills every line with guesses is not.
 
-## Evidence gates — v1.4 (offline, reproducible)
+## Evidence gates — v1.4 + v1.6 (offline, reproducible)
 
-The eight hunt phases still apply. v1.4 adds four **evidence evaluators**, not
-four new ghost classes. They accept **operator-prepared aggregate JSON only**,
-never connect to production and never send messages, deploy, or change data:
+The eight hunt phases still apply. The v1.4 four evidence gates remain;
+v1.6 adds three more. These are evaluators, **not** additional ghost classes.
+They accept **operator-prepared aggregate JSON only**, never connect to
+production or send messages, deploy, run tests, or change data:
 
 | Gate | Use it | Clear state (not a license to write) |
 |---|---|---|
@@ -87,16 +88,23 @@ never connect to production and never send messages, deploy, or change data:
 | **Pulse** | Class 1: scheduled job green, source maybe frozen, business activity continues | `PROGRESS_OBSERVED` = no stall sign in this window |
 | **Impact** | Before changing a cap, filter, permission or eligibility predicate; bulk actions at risk | `CLEAR` only after newly exposed rows/actions/dependencies were reviewed |
 | **Release** | Before saying an incident was fixed for users | `VERIFIED_IN_PRODUCTION` requires merge, CI, deployed artifact, applicable migrations, environment and post-deploy smoke |
+| **Runtime Identity (v1.6)** | Before citing actual deployed environment: deployment provider, live app and read-only DB agree? | `CORROBORATED_CANDIDATE`, never independently authenticated by the gate |
+| **Human Alert (v1.6)** | Watchdog raised a row, but did a separate channel deliver it and a human acknowledge? | `ACKNOWLEDGED` requires submitted delivery + human ACK evidence |
+| **Regression (v1.6)** | Was the same bug reproduced RED, fixed GREEN, and checked against negative controls? | `RED_GREEN_RECORDED` (submitted isolated-test evidence, not tests run by the gate) |
 
 ```bash
 node references/ghost-guard.cjs environment --input <redacted-env-summary.json> --json
 node references/ghost-guard.cjs pulse       --input <activity-summary.json> --json
 node references/ghost-guard.cjs impact      --input <fix-impact-summary.json> --strict
 node references/ghost-guard.cjs release     --input <release-evidence.json> --strict
+node references/ghost-guard.cjs runtime-identity --input examples/runtime-corroborated.json --strict
+node references/ghost-guard.cjs human-alert --input examples/human-alert-overdue.json --json
+node references/ghost-guard.cjs regression --input examples/regression-recorded.json --strict
 ```
 
 For input schemas, positive/negative examples, status meanings and safety limits,
-see [references/v1.4-guards.md](references/v1.4-guards.md). Never submit
+see [references/v1.4-guards.md](references/v1.4-guards.md) and
+[references/v1.6-guards.md](references/v1.6-guards.md). Never submit
 customer records, secrets, URLs containing access tokens, payment records or
 raw exports as JSON. If provenance is absent, label conclusions *hypothesis*.
 A JSON assertion is not independent proof that a production observation exists.
@@ -112,10 +120,11 @@ review, without exposing a customer's private data. For finance-specific
 invariants, see [references/finance-invariants.md](references/finance-invariants.md);
 they are optional project-specific templates, not tax or financial advice.
 
-## Autonomous Hunter — v1.5 (optional, read-only)
+## Autonomous Hunter — v1.5 core, v1.6 gates (optional, read-only)
 
 v1.5 adds a **deterministic runner**, not an autonomous repair agent. It
 uses the existing v1.4 Pulse, Impact, Release, and Environment evidence gates
+plus v1.6 Runtime Identity, Human Alert and Regression evaluators
 on **authorized pre-aggregated JSON** from a restricted local file or
 explicitly allowlisted HTTPS GET endpoint. An external private scheduler
 (e.g. a four-hour GitHub Actions job) runs it repeatedly. It writes local
@@ -194,7 +203,7 @@ its date, not as a finding.
 
 ### 2. Instruments — observe before explaining
 
-Verify the deployed **environment identity** first; the Supabase project display name is not proof. Run the offline Environment gate when a safe aggregate summary is available. For a green sync or stalled pipeline, run Pulse on independent source/downstream evidence and check working hours/latency.
+Verify the deployed **environment identity** first; the database display name is not proof. Run the Environment gate as a preliminary check, then use v1.6 Runtime Identity when you can obtain three independent private observations: deployment-provider configuration + running app artifact/binding + read-only database anchor. A matching set of operator assertions is CORROBORATED_CANDIDATE, not a provider-authenticated fact. For green syncs, run Pulse on independent source/downstream evidence, working hours and delays.
 
 Identify the ghost class in `references/ghost-classes.md` and run its probes
 from `references/probes.sql` (all read-only). Minimum set for any "money or
@@ -260,6 +269,12 @@ A ghost you cannot catch twice will come back. Before any change:
   from live roles for permissions; data invariants as SQL.
 - Never run `begin … rollback` experiments on the production database without
   explicit owner permission. Use a local rebuild or fixtures.
+- For v1.6 Regression gate, collect **separate before/after CI evidence**, timestamps,
+  same test case, negative controls and safe isolated environment. Run
+  `node references/ghost-guard.cjs regression --input <sanitized.json> --strict`
+  only after actual RED/GREEN runs. `RED_GREEN_RECORDED` is not a test execution
+  or independent CI verification. If the trap was not run, record `NOT_RUN` and
+  do not announce the fix as proven.
 
 ### 5. Exorcism — fix with the neighbours in view
 
@@ -303,6 +318,12 @@ For every ghost caught, answer in writing:
 - Does this class have an alarm channel, and **can it physically fire**
   (a muting trigger, the wrong role, a board row limit, a log nobody reads)?
 - If there is no channel — propose a watchdog as a separate ticket, never silently.
+- For a real human-facing alarm verify **detection → task creation → independent
+  delivery channel → provider receipt → human ACK → escalation if overdue**.
+  A green scheduler or a database row is not a delivered alert. In v1.6 use
+  `human-alert` on sanitized private evidence. A messaging outage must not page
+  exclusively through that broken messaging channel; do not claim monitoring
+  works unless an operator can receive and acknowledge the signal.
 
 A "green dashboard" without a proven alarm channel means nothing.
 
@@ -411,6 +432,9 @@ ARCHIVE     memory: <N entries, key ids> · notes: <files> · ticket: <id, do-no
             REJECTED: <what is already disproved and will not be repeated>
 INSTRUMENTS <probe → result> … (production read-only, timestamp UTC) | not taken: <why>
 ENVIRONMENT <expected ref / deployed ref / observed ref verified?> · role · evidence, or UNVERIFIED
+RUNTIME     <provider + running artifact + DB read-only evidence> · CORROBORATED_CANDIDATE / MISMATCH / NOT_RUN
+HUMAN_ALERT <detected → created → delivered → acknowledged; independent channel?> · status / NOT_RUN
+REGRESSION  <isolated RED → GREEN; controls; private CI pointers> · status / NOT_RUN
 PULSE       <execution + freshness + progress + independent signal> · status / N/A
 IMPACT      <newly eligible data + actions + unsafe count + dependencies> · status / N/A
 RELEASE     <PR → main → CI → deploy → migration → post-deploy test> · status / NOT YET
