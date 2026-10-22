@@ -1,0 +1,58 @@
+{
+  "pipeline": "synthetic-order-import",
+  "observedAt": "2026-10-22T16:00:00Z",
+  "window": {
+    "start": "2026-10-22T12:00:00Z",
+    "end": "2026-10-22T16:00:00Z"
+  },
+  "activityExpected": true,
+  "minSuccessfulRuns": 3,
+  "minSnapshots": 3,
+  "maxSnapshotAgeMinutes": 120,
+  "runs": [
+    {
+      "at": "2026-10-22T13:00:00Z",
+      "ok": true,
+      "rowsImported": 0
+    },
+    {
+      "at": "2026-10-22T14:00:00Z",
+      "ok": true,
+      "rowsImported": 0
+    },
+    {
+      "at": "2026-10-22T15:00:00Z",
+      "ok": true,
+      "rowsImported": 0
+    }
+  ],
+  "sourceSnapshots": [
+    {
+      "at": "2026-10-22T13:00:00Z",
+      "fingerprint": "identical-source-hash",
+      "rows": 250
+    },
+    {
+      "at": "2026-10-22T14:00:00Z",
+      "fingerprint": "identical-source-hash",
+      "rows": 250
+    },
+    {
+      "at": "2026-10-22T15:00:00Z",
+      "fingerprint": "identical-source-hash",
+      "rows": 250
+    }
+  ],
+  "upstreamEvents": [
+    {
+      "at": "2026-10-22T15:00:00Z",
+      "count": 12
+    }
+  ],
+  "downstreamEvents": [
+    {
+      "at": "2026-10-22T15:00:00Z",
+      "count": 0
+    }
+  ]
+}
