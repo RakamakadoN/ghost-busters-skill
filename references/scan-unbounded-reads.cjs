@@ -8,7 +8,7 @@
  *   WRITE         insert / update / delete / upsert in the chain (hidden unless --writes)
  *   SINGLE        .single() / .maybeSingle()
  *   HEAD          select(..., { head: true }) — count only
- *   RANGE         .range(a, b) with computed bounds — assumed to be a paging loop
+ *   RANGE         .range(a, b) with computed bounds — pagination is NOT proven
  *   RANGE_SINGLE  .range(<n>, <m>) with two literals — ONE page of m-n+1 rows, i.e. a cap
  *   LIMIT:n       .limit(n); n > cap is flagged FALSE_CEILING
  *   CONDITIONAL   a bound exists only on some control-flow path (if / ternary / && / loop / callback)
@@ -18,7 +18,7 @@
  * This is a static scan, not a proof: it finds suspicious call sites for a
  * human (or a probe against production) to confirm. Its limits are listed in
  * lib/chains.cjs. "At risk" = UNBOUNDED, CONDITIONAL, UNKNOWN, RANGE_SINGLE
- * and any FALSE_CEILING.
+ * and any FALSE_CEILING, UNCERTAIN_BOUND or UNVERIFIED_PAGINATION.
  *
  * Usage:
  *   node scan-unbounded-reads.cjs [srcDir=src] [--cap 1000] [--json] [--writes] [--table name] [--strict]
@@ -32,10 +32,10 @@
 
 const fs = require('fs');
 const path = require('path');
-const { loadTypescript, walkSources, literalText, isTableFrom, chainAbove, followVariable } = require('./lib/chains.cjs');
+const { loadTypescript, walkSources, literalText, isTableFrom, isDynamicTableFrom, fromReceiverRoot, chainAbove, followVariable } = require('./lib/chains.cjs');
 
 const args = process.argv.slice(2);
-const VALUE_OPTS = new Set(['--cap', '--table']);
+const VALUE_OPTS = new Set(['--cap', '--table', '--client-root']);
 const flag = (name) => args.includes(name);
 const opt = (name, def) => {
   const i = args.indexOf(name);
@@ -44,6 +44,7 @@ const opt = (name, def) => {
 const srcDir = args.find((a, i) => !a.startsWith('--') && !(i > 0 && VALUE_OPTS.has(args[i - 1]))) || 'src';
 const CAP = Number(opt('--cap', '1000'));
 const ONLY_TABLE = opt('--table', null);
+const CLIENT_ROOTS = args.flatMap((arg,i) => arg === '--client-root' && args[i+1] ? [args[i+1]] : []);
 const SHOW_WRITES = flag('--writes');
 const AS_JSON = flag('--json');
 const STRICT = flag('--strict');
@@ -84,12 +85,12 @@ function classify(calls, rebound) {
         const n = b - a + 1;
         return { kind: 'RANGE_SINGLE', limit: n, falseCeiling: n > CAP, note: 'one page, not pagination' };
       }
-      return { kind: 'RANGE', note: 'computed bounds — paging loop assumed, completeness not proven' };
+      return { kind: 'RANGE', paginationUnverified: true, note: 'computed range bounds alone do not prove all pages are fetched' };
     }
     const limit = list.find((c) => c.name === 'limit');
     if (limit) {
       const n = numericArg(limit.args[0]);
-      return { kind: 'LIMIT', limit: n, falseCeiling: n !== null && n > CAP };
+      return { kind: 'LIMIT', limit: n, falseCeiling: n !== null && n > CAP, uncertainBound: n === null, note: n === null ? 'dynamic limit — server cap and completeness not proven' : undefined };
     }
     return null;
   };
@@ -100,19 +101,31 @@ function classify(calls, rebound) {
   return { kind: 'UNBOUNDED' };
 }
 
-const AT_RISK = (f) => f.kind === 'UNBOUNDED' || f.kind === 'CONDITIONAL' || f.kind === 'UNKNOWN' || f.kind === 'RANGE_SINGLE' || !!f.falseCeiling;
+const AT_RISK = (f) => f.kind === 'UNBOUNDED' || f.kind === 'CONDITIONAL' || f.kind === 'UNKNOWN' || f.kind === 'RANGE_SINGLE' || f.kind === 'DYNAMIC_TABLE' || f.kind === 'EARLY_EXECUTION' || !!f.falseCeiling || !!f.uncertainBound || !!f.paginationUnverified;
 
 const findings = [];
 for (const file of walkSources(srcDir)) {
   const text = fs.readFileSync(file, 'utf8');
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const visit = (node) => {
-    if (isTableFrom(ts, node)) {
+    if ((isTableFrom(ts, node) || isDynamicTableFrom(ts, node)) &&
+        (!CLIENT_ROOTS.length || CLIENT_ROOTS.includes(fromReceiverRoot(ts, node)))) {
       const table = literalText(ts, node.arguments[0]);
       const { calls, top } = chainAbove(ts, node);
       const viaVar = followVariable(ts, top, sf, node);
       const all = calls.concat(viaVar.calls);
       const cls = classify(all, viaVar.rebound);
+      const beforeBound = (viaVar.executions || []).some((pos) =>
+        !all.some((c) => !c.conditional && (BOUNDING.has(c.name) || headSelect(c)) && c.node.getStart(sf) < pos)
+      );
+      if (beforeBound && ['LIMIT', 'SINGLE', 'HEAD'].includes(cls.kind)) {
+        cls.kind = 'EARLY_EXECUTION';
+        cls.note = 'await/then observed before an unconditional row bound; review execution order';
+      }
+      if (isDynamicTableFrom(ts, node) && cls.kind !== 'WRITE' && cls.kind !== 'NOSELECT') {
+        cls.kind = 'DYNAMIC_TABLE';
+        cls.note = 'nonliteral table name; verify query target';
+      }
       const order = all.filter((c) => c.name === 'order').map((c) => literalText(ts, c.args[0])).filter(Boolean);
       const { line } = sf.getLineAndCharacterOfPosition(node.expression.name.getStart(sf));
       findings.push({
@@ -122,6 +135,8 @@ for (const file of walkSources(srcDir)) {
         kind: cls.kind,
         limit: cls.limit ?? null,
         falseCeiling: !!cls.falseCeiling,
+        uncertainBound: !!cls.uncertainBound,
+        paginationUnverified: !!cls.paginationUnverified,
         note: cls.note ?? null,
         viaVariable: viaVar.ident,
         order,
@@ -144,14 +159,14 @@ if (AS_JSON) {
   process.exit(exitCode);
 }
 
-const rank = { UNBOUNDED: 0, CONDITIONAL: 1, UNKNOWN: 2, RANGE_SINGLE: 3, LIMIT: 4, RANGE: 5, SINGLE: 6, HEAD: 7, WRITE: 8 };
+const rank = { EARLY_EXECUTION: 0, UNBOUNDED: 0, CONDITIONAL: 1, UNKNOWN: 2, RANGE_SINGLE: 3, LIMIT: 4, RANGE: 5, SINGLE: 6, HEAD: 7, WRITE: 8 };
 const byTable = new Map();
 for (const f of out) {
   if (!byTable.has(f.table)) byTable.set(f.table, []);
   byTable.get(f.table).push(f);
 }
 const risk = (list) => list.filter(AT_RISK).length;
-const tables = [...byTable.entries()].sort((a, b) => risk(b[1]) - risk(a[1]) || a[0].localeCompare(b[0]));
+const tables = [...byTable.entries()].sort((a, b) => risk(b[1]) - risk(a[1]) || String(a[0] ?? '').localeCompare(String(b[0] ?? '')));
 
 const totals = out.reduce((acc, f) => ((acc[f.kind] = (acc[f.kind] || 0) + 1), acc), {});
 console.log(`chains: ${findings.length} · reads: ${out.length} · at risk: ${atRisk} · ` + Object.entries(totals).map(([k, v]) => `${k} ${v}`).join(' · ') + ` · cap ${CAP}`);
@@ -161,8 +176,9 @@ for (const [table, list] of tables) {
   console.log(`${table}  (${list.length} reads${r ? `, ${r} at risk` : ''})`);
   for (const f of list.sort((a, b) => rank[a.kind] - rank[b.kind])) {
     let tag = f.kind;
-    if (f.kind === 'LIMIT') tag = `LIMIT:${f.limit ?? '?'}${f.falseCeiling ? ' FALSE_CEILING' : ''}`;
+    if (f.kind === 'LIMIT') tag = `LIMIT:${f.limit ?? '?'}${f.falseCeiling ? ' FALSE_CEILING' : ''}${f.uncertainBound ? ' UNCERTAIN_BOUND' : ''}`;
     if (f.kind === 'RANGE_SINGLE') tag = `RANGE_SINGLE:${f.limit}${f.falseCeiling ? ' FALSE_CEILING' : ''}`;
+    if (f.kind === 'RANGE' && f.paginationUnverified) tag = 'RANGE UNVERIFIED_PAGINATION';
     const ord = f.order.length ? `  order=[${f.order.join(', ')}]` : f.kind === 'RANGE' ? '  order=[]  !no order' : '';
     const note = f.note ? `  (${f.note})` : '';
     console.log(`  ${f.file}:${f.line}  ${tag}${ord}${note}`);

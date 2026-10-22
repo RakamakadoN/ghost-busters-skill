@@ -155,6 +155,26 @@ node references/scan-select-columns.cjs src \
 
 (When installed as a skill, prefix the paths with `.claude/skills/ghost-busters/`.)
 
+For mixed query libraries, supply an **explicit syntactic root filter** with
+`--client-root` (repeatable) to either scanner, for example:
+
+```bash
+node references/scan-unbounded-reads.cjs src --client-root supabase --client-root db --json
+node references/scan-select-columns.cjs src --types src/types/database.types.ts --client-root supabase --json
+```
+
+This filters receiver names such as `supabase.schema('public').from(...)`.
+It is **not type inference**: an unrelated library aliased to `db` can still
+match, and genuine Supabase clients under other names can be missed. Without
+the option the scanners keep their previous broad discovery behavior.
+
+The row-cap scanner also flags `EARLY_EXECUTION` when an observed `await q`
+or `q.then(...)` can initiate a query before an unconditional
+`q.limit(...)` / `q.range(...)` / single-row bound. This is a conservative
+source-order signal, not full JavaScript control-flow or runtime proof.
+
+
+
 Both walk every supabase-js `.from(` chain with the TypeScript compiler API,
 follow chains assembled through a variable by resolving later calls to that
 variable's declaration through lexical scopes (a shadowing `const q` in an
@@ -163,10 +183,51 @@ and print file:line findings grouped by table. A bound that exists on only
 one control-flow path is reported as CONDITIONAL, a variable bound to two
 different queries as UNKNOWN (the column scanner then checks only the
 direct part of each chain), a literal `.range(0, 999)` as one page rather
-than pagination. The second scanner needs the generated Supabase
+than pagination. The row-cap scanner also reports nonliteral table names as DYNAMIC_TABLE, dynamic
+limits as UNCERTAIN_BOUND, and computed .range(...) calls as
+UNVERIFIED_PAGINATION. Those are **review candidates**, not confirmed bugs.
+Even a .range(...) inside a loop does not prove termination, stable ordering
+or that all pages were fetched. The second scanner needs the generated Supabase
 types and prints how old they are. Their analysis limits are listed at the
 top of `references/lib/chains.cjs`; a finding is a call site to check, not a
 proven bug, and a clean scan is not proof of absence.
+
+## Benchmark fixtures and label audit
+
+Two reproducible row-cap scanner fixtures live in `benchmark/row-cap-30.cjs`
+and `benchmark/adversarial-30.cjs` (30 cases each). They exercise known
+heuristics; they are **not independent blind tests of the eight-phase skill**
+and cannot establish production precision, recall, or completeness.
+
+On 2026-10-22 two previously scored "safe" cases —
+`range-computed` and `computed-range` — were explicitly reclassified as
+review-only. A computed range can represent one page rather than a complete
+pagination loop. This reduces the scored denominator from 45 to 43 across
+both suites (17 cases require review rather than the previous 15). These are
+**post-hoc label corrections** recorded in Git history, not new independent
+evidence of accuracy. The other labels remain fixture-specific.
+
+Run:
+
+```bash
+npm test
+node benchmark/row-cap-30.cjs
+node benchmark/adversarial-30.cjs
+```
+
+## Additional adversarial regressions
+
+`tests/adversarial-origin-order.test.cjs` contains new targeted cases for
+foreign `.from()` APIs, receiver-root scoping of both scanners, and thenable
+execution before versus after bounds. These tests are separate from the
+original 60 fixtures and do not increase their scored denominator. They were
+chosen after inspecting the implementation, so they are **not blind tests**.
+`npm test` includes them and all prior regression suites.
+
+The optional GitHub Actions workflow under
+`.github/workflows/scanner-checks.yml` runs the same regression suite and
+two fixture benchmarks on supported events. A workflow file alone is not
+proof that Actions executed or passed.
 
 ## Adapting
 

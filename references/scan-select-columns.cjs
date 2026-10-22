@@ -47,10 +47,10 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { loadTypescript, walkSources, literalText, isTableFrom, explicitSchema, chainAbove, followVariable } = require('./lib/chains.cjs');
+const { loadTypescript, walkSources, literalText, isTableFrom, fromReceiverRoot, explicitSchema, chainAbove, followVariable } = require('./lib/chains.cjs');
 
 const args = process.argv.slice(2);
-const VALUE_OPTS = new Set(['--types', '--schema-for']);
+const VALUE_OPTS = new Set(['--types', '--schema-for', '--client-root']);
 const flag = (n) => args.includes(n);
 const opt = (n, d) => {
   const i = args.indexOf(n);
@@ -59,6 +59,7 @@ const opt = (n, d) => {
 const srcDir = args.find((a, i) => !a.startsWith('--') && !(i > 0 && VALUE_OPTS.has(args[i - 1]))) || 'src';
 const TYPES = opt('--types', 'src/types/database.types.ts');
 const AS_JSON = flag('--json');
+const CLIENT_ROOTS = args.flatMap((arg,i) => arg === '--client-root' && args[i+1] ? [args[i+1]] : []);
 const SCHEMA_FOR = [];
 args.forEach((a, i) => {
   if (a === '--schema-for' && args[i + 1] && args[i + 1].includes('=')) {
@@ -198,7 +199,8 @@ for (const file of walkSources(srcDir, [path.dirname(TYPES)])) {
   const rel = path.relative(process.cwd(), file);
   const push = (line, object, kind, detail) => findings.push({ file: rel, line, object, kind, detail });
   const visit = (node) => {
-    if (isTableFrom(ts, node)) {
+    if (isTableFrom(ts, node) &&
+        (!CLIENT_ROOTS.length || CLIENT_ROOTS.includes(fromReceiverRoot(ts, node)))) {
       chains++;
       const table = literalText(ts, node.arguments[0]);
       const { line: l0 } = sf.getLineAndCharacterOfPosition(node.expression.name.getStart(sf));
