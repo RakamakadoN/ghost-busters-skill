@@ -11,7 +11,7 @@ try{
  const run=cp.spawnSync(process.execPath,[path.join(root,'references/scan-unbounded-reads.cjs'),dir,'--json'],{cwd:root,encoding:'utf8'});
  if(run.error||run.status!==0)throw Error('Scanner failed: '+(run.error?.message||run.stderr));
  const all=JSON.parse(run.stdout);
- const risky=f=>['UNBOUNDED','CONDITIONAL','UNKNOWN','RANGE_SINGLE'].includes(f.kind)||f.falseCeiling===true;
+ const risky=f=>['UNBOUNDED','CONDITIONAL','UNKNOWN','RANGE_SINGLE'].includes(f.kind)||f.falseCeiling===true||f.uncertainBound===true;
  const results=cases.map(([id,expected])=>{
    const matches=all.filter(f=>f.file.replaceAll('\\','/').includes('/'+id+'/'));
    const observed=matches.some(risky)?'risk':'safe';
