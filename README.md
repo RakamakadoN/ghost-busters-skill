@@ -3,7 +3,7 @@
 **A debugging skill for hunting bugs that never crash.** — **v1.5.0**
 
 Originally developed for Claude Code, Ghost Busters provides a reusable investigation
-protocol, standalone Node.js scanners, and offline evidence-gated checks. The protocol can also guide OpenAI Codex
+protocol, standalone Node.js scanners, offline evidence gates, and a read-only monitoring runner. The protocol can also guide OpenAI Codex
 sessions when its instructions and project-specific context are supplied; a native
 Codex integration has not yet been verified.
 
@@ -28,11 +28,13 @@ ghost-busters/
 │   ├── scan-unbounded-reads.cjs AST scan: supabase-js reads without paging (class 3 signature)
 │   ├── scan-select-columns.cjs  AST scan: selected/filtered columns vs generated types (class 5)
 │   ├── ghost-guard.cjs         offline CLI: pulse / impact / release / environment
+│   ├── ghost-hunter.cjs        v1.5 stateful read-only runner
+│   ├── autonomous-hunter.md    private deployment guide
 │   ├── v1.4-guards.md          input formats, statuses, safety rules, reproduction
 │   ├── evidence-ledger.md      incident evidence tiers and benchmark protocol
 │   ├── finance-invariants.md   opt-in finance invariants (templates only)
 │   └── lib/                   AST chain walker + pure guardrail evaluators
-├── examples/                    synthetic/redacted summaries (never production exports)
+├── examples/                    synthetic examples and private scheduler template
 ├── tests/                       scanner + evidence-gate regressions, hunt scenarios
 ├── CUSTOMIZE.md                 the six things that are yours to fill in
 └── LICENSE                      MIT
