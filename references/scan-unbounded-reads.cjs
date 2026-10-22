@@ -18,7 +18,7 @@
  * This is a static scan, not a proof: it finds suspicious call sites for a
  * human (or a probe against production) to confirm. Its limits are listed in
  * lib/chains.cjs. "At risk" = UNBOUNDED, CONDITIONAL, UNKNOWN, RANGE_SINGLE
- * and any FALSE_CEILING.
+ * and any FALSE_CEILING or UNCERTAIN_BOUND.
  *
  * Usage:
  *   node scan-unbounded-reads.cjs [srcDir=src] [--cap 1000] [--json] [--writes] [--table name] [--strict]
@@ -89,7 +89,7 @@ function classify(calls, rebound) {
     const limit = list.find((c) => c.name === 'limit');
     if (limit) {
       const n = numericArg(limit.args[0]);
-      return { kind: 'LIMIT', limit: n, falseCeiling: n !== null && n > CAP };
+      return { kind: 'LIMIT', limit: n, falseCeiling: n !== null && n > CAP, uncertainBound: n === null, note: n === null ? 'dynamic limit — server cap and completeness not proven' : undefined };
     }
     return null;
   };
@@ -100,7 +100,7 @@ function classify(calls, rebound) {
   return { kind: 'UNBOUNDED' };
 }
 
-const AT_RISK = (f) => f.kind === 'UNBOUNDED' || f.kind === 'CONDITIONAL' || f.kind === 'UNKNOWN' || f.kind === 'RANGE_SINGLE' || !!f.falseCeiling;
+const AT_RISK = (f) => f.kind === 'UNBOUNDED' || f.kind === 'CONDITIONAL' || f.kind === 'UNKNOWN' || f.kind === 'RANGE_SINGLE' || !!f.falseCeiling || !!f.uncertainBound;
 
 const findings = [];
 for (const file of walkSources(srcDir)) {
@@ -122,6 +122,7 @@ for (const file of walkSources(srcDir)) {
         kind: cls.kind,
         limit: cls.limit ?? null,
         falseCeiling: !!cls.falseCeiling,
+        uncertainBound: !!cls.uncertainBound,
         note: cls.note ?? null,
         viaVariable: viaVar.ident,
         order,
@@ -161,7 +162,7 @@ for (const [table, list] of tables) {
   console.log(`${table}  (${list.length} reads${r ? `, ${r} at risk` : ''})`);
   for (const f of list.sort((a, b) => rank[a.kind] - rank[b.kind])) {
     let tag = f.kind;
-    if (f.kind === 'LIMIT') tag = `LIMIT:${f.limit ?? '?'}${f.falseCeiling ? ' FALSE_CEILING' : ''}`;
+    if (f.kind === 'LIMIT') tag = `LIMIT:${f.limit ?? '?'}${f.falseCeiling ? ' FALSE_CEILING' : ''}${f.uncertainBound ? ' UNCERTAIN_BOUND' : ''}`;
     if (f.kind === 'RANGE_SINGLE') tag = `RANGE_SINGLE:${f.limit}${f.falseCeiling ? ' FALSE_CEILING' : ''}`;
     const ord = f.order.length ? `  order=[${f.order.join(', ')}]` : f.kind === 'RANGE' ? '  order=[]  !no order' : '';
     const note = f.note ? `  (${f.note})` : '';
