@@ -118,15 +118,15 @@ test('impact: dangerous widened queue is blocked and does not leak row identifie
   assert.equal(result.metrics.blockedDependencies, 1);
   assert.ok(!JSON.stringify(result).includes('new1'), 'no row-level identity should leak in report');
 });
-test('impact: 682 new records with 402 stale, actionable is a BLOCKED dry-run', () => {
+test('impact: 120 synthetic new records with 35 stale, actionable is a BLOCKED dry-run', () => {
   const x = impactInput();
   x.dependencies[0].satisfied = true;
-  x.after.ids = ['visible', ...Array.from({ length: 682 }, (_, i) => 'synthetic-' + i)];
-  x.records = x.after.ids.slice(1).map((id, i) => ({ id, stale: i < 402, actionable: true }));
+  x.after.ids = ['visible', ...Array.from({ length: 120 }, (_, i) => 'synthetic-' + i)];
+  x.records = x.after.ids.slice(1).map((id, i) => ({ id, stale: i < 35, actionable: true }));
   const result = impact(x);
   assert.equal(result.status, 'BLOCKED');
-  assert.equal(result.metrics.newlyVisible, 682);
-  assert.equal(result.metrics.newlyVisibleStaleActionable, 402);
+  assert.equal(result.metrics.newlyVisible, 120);
+  assert.equal(result.metrics.newlyVisibleStaleActionable, 35);
 });
 test('impact: stale but not actionable entries do not block preview', () => {
   const x = impactInput();
