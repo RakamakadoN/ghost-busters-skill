@@ -25,7 +25,8 @@ function release(input) {
   const deploymentSha = typeof deploy.sha === 'string' && deploy.sha.trim() ? deploy.sha : null;
   const smokeSha = typeof smoke.testedDeploymentSha === 'string' && smoke.testedDeploymentSha.trim() ? smoke.testedDeploymentSha : null;
   const smokeAt = smoke.observedAt ? e.timestamp(smoke.observedAt, 'smoke.observedAt') : null;
-  const smokeAgeMinutes = smokeAt === null ? null : Math.round((observedAt - smokeAt) / 60000);
+  const smokeAgeMs = smokeAt === null ? null : observedAt - smokeAt;
+  const smokeAgeMinutes = smokeAgeMs === null ? null : Math.round(smokeAgeMs / 60000);
   const migrationRequired = e.boolean(migration.required, 'migration.required');
   const environmentMatches = deploy.environmentId === environmentId && smoke.environmentId === environmentId;
   const checks = {
@@ -41,7 +42,7 @@ function release(input) {
     deployedSchemaVerified: migrationRequired ? asFlag(migration.schemaVerified, 'migration.schemaVerified') : true,
     smokePassed: asFlag(smoke.passed, 'smoke.passed'),
     smokeTestedLiveSha: deploymentSha && smokeSha ? deploymentSha === smokeSha : null,
-    smokeFresh: smokeAgeMinutes !== null && smokeAgeMinutes >= 0 && smokeAgeMinutes <= maxSmokeAgeMinutes
+    smokeFresh: smokeAgeMs !== null && smokeAgeMs >= 0 && smokeAgeMs <= maxSmokeAgeMinutes * 60000
   };
   // A receipt is a reference to verifiable external evidence, not the evidence itself.
   const sourceRefs = {
