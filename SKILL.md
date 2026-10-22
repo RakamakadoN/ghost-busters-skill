@@ -2,7 +2,7 @@
 name: ghost-busters
 description: Use when a number, screen, task feed, sync, cron job or report in a CRM/ERP looks wrong or suspiciously quiet — "the total doesn't match the accounting system", "the screen shows 0", "tasks are firing for no reason", "the sync is silent", "tests are green but the page is broken", "nothing arrived", a regression after a fix, any silent failure — and before proposing any fix. Also use for a proactive sweep ("raid") of a module for known ghost classes.
 metadata:
-  version: 1.3.0
+  version: 1.4.0
   origin: distilled from ~60 production incidents in a React + Supabase CRM/ERP
 ---
 
@@ -73,6 +73,38 @@ Rules that hold in every mode:
   to production for a claim about data, no deployed-version listing for a
   code ≠ production claim. A report that records its limits is complete; a
   report that fills every line with guesses is not.
+
+## v1.4 — offline evidence gates (tools, not background agents)
+
+Three executable checks support — but do not replace — the eight phases:
+
+| Gate | Use it when | It returns |
+| --- | --- | --- |
+| **Ghost Pulse** — `references/ghost-pulse.cjs` | pipeline reports success, but source/data freshness is uncertain | **suspected** stall, activity/progress evidence, or insufficient evidence |
+| **Ghost Impact** — `references/ghost-impact.cjs` | fix exposes more records, especially for a bulk action | `BLOCKED`, `REVIEW_REQUIRED` or `PASS_PREVIEW` from a dry-run |
+| **Ghost Release** — `references/ghost-release.cjs` | PR is claimed fixed in production | evidence completeness across merge, CI, deployed code, migration and live smoke |
+
+All three consume an explicitly prepared JSON evidence file; **none connects to
+production or takes action**. Collect evidence through separately authorized
+read-only channels, record environment and role, use canonical predicates, and
+do not commit customer data. See the [playbook](references/v14-playbook.md).
+
+~~~sh
+node references/ghost-pulse.cjs --input examples/ghost-pulse.json --json
+node references/ghost-impact.cjs --input examples/ghost-impact.json --json
+node references/ghost-release.cjs --input examples/ghost-release.json --json
+~~~
+
+`--strict` exits 1 for adverse/insufficient verdicts, 2 for invalid evidence.
+A `PASS_PREVIEW` never authorizes a bulk action. A
+`RELEASE_EVIDENCE_COMPLETE` means internally consistent **supplied evidence**,
+not independently confirmed production success. Pulse reports **suspicions**,
+not a causal proof of missing business events.
+
+**Mode mapping:** HUNT Phase 2 can run Pulse, Phase 5 can run Impact,
+Phase 5/6 can run Release. Routine hunters remain read-only and cannot
+auto-deploy or send external messages.
+
 
 ## The hunt
 
@@ -217,6 +249,10 @@ Four report lines before editing:
    402 of them false payment demands; the fix was held until the stale drafts
    were dismissed. A class-3 ghost wakes a class-4 ghost.
 
+**Evidence gate:** for every fix widening a query or enabling actions on
+additional rows, run Ghost Impact against matching before/after scopes. Unknown
+eligibility is REVIEW_REQUIRED. The server-side guard remains mandatory.
+
 Copy the home predicate; never invent a new one (see `CUSTOMIZE.md`, "Home predicates").
 
 ### 6. Watchdog — why nobody noticed
@@ -229,6 +265,10 @@ For every ghost caught, answer in writing:
 - If there is no channel — propose a watchdog as a separate ticket, never silently.
 
 A "green dashboard" without a proven alarm channel means nothing.
+
+**Release evidence gate:** merged PR ≠ deployed fix. Ghost Release checks
+attestations for main ancestry, required CI, deployed SHA, migration approval
+and current smoke. Evidence references still require independent verification.
 
 ### 7. Record — write it down before it fades
 
