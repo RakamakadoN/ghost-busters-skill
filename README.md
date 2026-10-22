@@ -1,6 +1,11 @@
 # Ghost Busters
 
-**A Claude Code skill for hunting bugs that never crash.**
+**A debugging skill for hunting bugs that never crash.**
+
+Originally developed for Claude Code, Ghost Busters provides a reusable investigation
+protocol and standalone Node.js scanners. The protocol can also guide OpenAI Codex
+sessions when its instructions and project-specific context are supplied; a native
+Codex integration has not yet been verified.
 
 A ghost is a bug that does not fail. It shows 0 instead of an error, "success"
 instead of 0 rows, green CI instead of a broken screen, silence instead of an
@@ -62,6 +67,8 @@ RAID          after one catch, sweep for siblings of the same class with paralle
 
 ## Install
 
+### Claude Code
+
 Copy the folder into your project's skills directory:
 
 ```bash
@@ -75,6 +82,14 @@ still works; with it the hunt stops asking.
 Invoke with `/ghost-busters <symptom>` or `/ghost-busters raid <area>`. Claude
 Code also picks it up automatically from the `description` when a symptom
 matches.
+
+### OpenAI Codex (manual use)
+
+Use `SKILL.md` as the investigation instructions and adapt `CUSTOMIZE.md` to
+your project. Provide both as context to a Codex session, along with the
+symptom you want investigated. The Node.js scanners can be run separately
+using the commands below. This is a manual workflow, not a claim of native
+Codex skill discovery or validated integration.
 
 ## Does it work? What is evidence and what is not
 
