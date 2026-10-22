@@ -1,0 +1,13 @@
+{
+  "evaluatedAt": "2026-10-23T10:00:00Z",
+  "detectedAt": "2026-10-23T09:00:00Z",
+  "createdAt": "2026-10-23T09:02:00Z",
+  "deliveredAt": null,
+  "acknowledgedAt": null,
+  "incidentChannel": "whatsapp",
+  "alertChannel": "email",
+  "channelIndependent": true,
+  "maxCreateMinutes": 10,
+  "maxDeliveryMinutes": 10,
+  "maxAckMinutes": 30
+}

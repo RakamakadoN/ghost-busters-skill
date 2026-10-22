@@ -1,0 +1,23 @@
+{
+  "evaluatedAt": "2026-10-23T10:00:00Z",
+  "environment": "isolated",
+  "testId": "synthetic-truncation-case",
+  "fixRevision": "synthetic-revision",
+  "before": {
+    "outcome": "FAIL",
+    "observedAt": "2026-10-23T08:00:00Z",
+    "evidenceId": "synthetic-ci/red"
+  },
+  "after": {
+    "outcome": "PASS",
+    "observedAt": "2026-10-23T09:00:00Z",
+    "evidenceId": "synthetic-ci/green"
+  },
+  "negativeControls": {
+    "total": 3,
+    "passed": 3
+  },
+  "independentReview": {
+    "completed": false
+  }
+}

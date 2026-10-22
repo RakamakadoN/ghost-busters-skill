@@ -1,0 +1,28 @@
+{
+  "evaluatedAt": "2026-10-23T10:00:00Z",
+  "maxAgeMinutes": 60,
+  "expectedProjectRef": "synthetic-prod-ref",
+  "accessReadOnly": true,
+  "deployment": {
+    "source": "deployment-provider",
+    "observedAt": "2026-10-23T09:45:00Z",
+    "evidenceId": "synthetic-ledger/provider",
+    "projectRef": "synthetic-prod-ref",
+    "artifactId": "synthetic-artifact-sha"
+  },
+  "runtime": {
+    "source": "runtime-response",
+    "observedAt": "2026-10-23T09:47:00Z",
+    "evidenceId": "synthetic-ledger/runtime",
+    "projectRef": "synthetic-prod-ref",
+    "artifactId": "synthetic-artifact-sha"
+  },
+  "database": {
+    "source": "readonly-database",
+    "observedAt": "2026-10-23T09:50:00Z",
+    "evidenceId": "synthetic-ledger/db",
+    "projectRef": "synthetic-prod-ref",
+    "anchorRows": 1300,
+    "minimumRows": 100
+  }
+}
