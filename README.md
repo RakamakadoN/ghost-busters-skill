@@ -1,9 +1,9 @@
 # Ghost Busters
 
-**A debugging skill for hunting bugs that never crash.**
+**A debugging skill for hunting bugs that never crash.** — **v1.4.0**
 
 Originally developed for Claude Code, Ghost Busters provides a reusable investigation
-protocol and standalone Node.js scanners. The protocol can also guide OpenAI Codex
+protocol, standalone Node.js scanners, and offline evidence-gated checks. The protocol can also guide OpenAI Codex
 sessions when its instructions and project-specific context are supplied; a native
 Codex integration has not yet been verified.
 
@@ -27,11 +27,42 @@ ghost-busters/
 │   ├── hunt-report.md           report template + a worked example
 │   ├── scan-unbounded-reads.cjs AST scan: supabase-js reads without paging (class 3 signature)
 │   ├── scan-select-columns.cjs  AST scan: selected/filtered columns vs generated types (class 5)
-│   └── lib/chains.cjs           shared chain walker, with the analysis limits spelled out
-├── tests/                       scanner regression tests + fixtures, and hunt scenarios with criteria
+│   ├── ghost-guard.cjs         offline CLI: pulse / impact / release / environment
+│   ├── v1.4-guards.md          input formats, statuses, safety rules, reproduction
+│   ├── evidence-ledger.md      incident evidence tiers and benchmark protocol
+│   ├── finance-invariants.md   opt-in finance invariants (templates only)
+│   └── lib/                   AST chain walker + pure guardrail evaluators
+├── examples/                    synthetic/redacted summaries (never production exports)
+├── tests/                       scanner + evidence-gate regressions, hunt scenarios
 ├── CUSTOMIZE.md                 the six things that are yours to fill in
 └── LICENSE                      MIT
 ```
+
+## What's new in v1.4.0
+
+The original eight-phase investigation process and 13 ghost classes remain intact.
+Four **offline evidence gates** make important conclusions inspectable and repeatable:
+
+| Gate | Question | Output |
+| --- | --- | --- |
+| **Ghost Pulse** | The scheduler is green — but is the source fresh, the data moving, and independent business activity present? | Suspected silent failure vs insufficient evidence or observed progress |
+| **Ghost Impact** | Will removing a cap/filter make unsafe hidden rows eligible for bulk actions? | `BLOCKED`, `REVIEW_REQUIRED`, `CLEAR` |
+| **Ghost Release** | Is the fix really merged, deployed and observed working for users? | From `FIX_PREPARED` through `VERIFIED_IN_PRODUCTION` |
+| **Ghost Environment** | Are we measuring the project ref actually used by the deployed application? | Identity matched, mismatch or insufficient evidence |
+
+```bash
+node references/ghost-guard.cjs pulse --input examples/pulse-suspected.json --json
+node references/ghost-guard.cjs impact --input examples/impact-blocked.json --json
+node references/ghost-guard.cjs release --input examples/release-unverified.json --json
+node references/ghost-guard.cjs environment --input examples/environment-mismatch.json --json
+npm test
+```
+
+**No production credentials are required.** The tool reads sanitized aggregate JSON summaries and has **no network calls or write actions**. It does not actively monitor a system: users or agents supply timestamped evidence. Positive gate results are not authorization to alter production.
+
+[Read the complete v1.4 guide](references/v1.4-guards.md) ·
+[Evidence ledger & independent evaluation](references/evidence-ledger.md) ·
+[Finance consistency playbook](references/finance-invariants.md)
 
 ## The protocol in one screen
 
@@ -99,7 +130,7 @@ Four different kinds of claim live here. They are not equally strong.
 distilled from roughly sixty incidents in one production CRM/ERP, and the
 catalogue's precedents are those incidents, anonymised. Its first live raid
 (class 3) scanned 916 query chains and found 4 screens truncating in
-production, 4 more near the threshold; 3 fixes were merged the same day with
+production, 4 more near the threshold; 3 fixes were merged across the following days with
 RED→GREEN paging tests, and one fix was held because un-truncating the
 screen would have fed 402 false payment demands into a bulk send — that is
 where the "what the fix will open" rule comes from. Version 1.2 came from 22
@@ -122,15 +153,16 @@ read-only, same tool budget, with both transcripts summarised:
 It is a single pair of runs on one scenario: a worked example of what the
 protocol changes, not a measurement of how often.
 
-**3. Reproducible tests (run them).** The two scanners have regression
-tests on small local fixtures, no database needed:
+**3. Reproducible tests (run them).** The two scanners and the v1.4 evidence gates have regression tests on small local fixtures, no database needed:
 
 ```bash
 npm install
 npm test
 ```
 
-They pin the classification of plain, whitespace-broken, variable-built,
+The v1.4 guard tests also check business-hour windows, independent liveness signals, blocking unsafe bulk actions, preserving deployment prerequisites, and rejecting wrong database identities. All test inputs are synthetic; they do not measure production precision or recall.
+
+The original scanner tests pin the classification of plain, whitespace-broken, variable-built,
 conditional and rebound chains, scope separation including nested shadowing
 and closures over an outer variable, non-table `.from()` calls, select-list
 parsing (casts, aliases, JSON paths, embeds, unsupported items), missing
@@ -145,7 +177,7 @@ sites and cannot prove a production bug exists or that none does. Treat the
 catalogue as a checklist shaped by one system's history, and the scanners
 as a way to find candidates for the probes.
 
-## Two scanners
+## Two static scanners
 
 ```bash
 node references/scan-unbounded-reads.cjs src                       # class 3: reads that can hit the row cap
