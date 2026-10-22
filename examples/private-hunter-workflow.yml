@@ -3,7 +3,7 @@
 # DO NOT RUN PRODUCTION COLLECTORS IN A PUBLIC REPOSITORY.
 # Set secrets.GHOST_HUNTER_TOKEN to a read-only collector token (never
 # Supabase service_role), and add a private hunter.config.json at repo root.
-# Replace PIN_REVIEWED_SHA with the audited Ghost Busters v1.5 commit SHA.
+# Ref is pinned to the reviewed v1.5 release commit; update only after validating a newer version.
 name: Ghost Busters Private Autonomous Hunter
 
 on:
@@ -32,7 +32,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: RakamakadoN/ghost-busters-skill
-          ref: PIN_REVIEWED_SHA
+          ref: 99f0af14e792c8ad1339ce1801601ca1a42bb03e
           path: .tools/ghost-busters
           persist-credentials: false
       - uses: actions/setup-node@v4
