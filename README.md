@@ -1,9 +1,9 @@
-# Ghost Busters
+# Ghost Busters v1.4
 
 **A debugging skill for hunting bugs that never crash.**
 
 Originally developed for Claude Code, Ghost Busters provides a reusable investigation
-protocol and standalone Node.js scanners. The protocol can also guide OpenAI Codex
+protocol, standalone Node.js scanners, and three offline evidence gates. The protocol can also guide OpenAI Codex
 sessions when its instructions and project-specific context are supplied; a native
 Codex integration has not yet been verified.
 
@@ -30,8 +30,44 @@ ghost-busters/
 │   └── lib/chains.cjs           shared chain walker, with the analysis limits spelled out
 ├── tests/                       scanner regression tests + fixtures, and hunt scenarios with criteria
 ├── CUSTOMIZE.md                 the six things that are yours to fill in
+├── examples/                     synthetic Pulse/Impact/Release input documents
+├── references/v14-playbook.md     v1.4 modes, schemas and safety boundaries
+├── references/ghost-*.cjs         v1.4 read-only evidence tools
 └── LICENSE                      MIT
 ```
+
+## New in v1.4 — offline safety toolkit
+
+The investigation protocol now ships with **three runnable, deterministic
+Node.js tools**. They evaluate *supplied JSON evidence* and have no database,
+network or deployment capabilities:
+
+| Tool | What it checks | Fail-closed decision |
+| --- | --- | --- |
+| **Ghost Pulse** | green runs vs repeated source fingerprints, independent upstream activity and downstream progress | suspected silent failure or insufficient evidence |
+| **Ghost Impact** | newly visible/actionable records, stale-record classification and unmet dependencies before a fix widens a query | `BLOCKED` / `REVIEW_REQUIRED` |
+| **Ghost Release** | PR merged, commit in main, required CI, deployed SHA, migration gate and fresh live smoke | complete or missing deployment evidence |
+
+~~~bash
+node references/ghost-pulse.cjs --input examples/ghost-pulse.json --json
+node references/ghost-impact.cjs --input examples/ghost-impact.json --json
+node references/ghost-release.cjs --input examples/ghost-release.json --json
+~~~
+
+All examples contain artificial records and hashes. Use `--strict` to return a
+nonzero exit code on unsafe or insufficient evidence. **None of these commands
+connects to Supabase, reads live systems, sends a message, executes a fix,
+merges a PR, or performs a deployment.** Actual production evidence must be
+obtained via separately authorized read-only tooling.
+
+The Release tool's best status, `RELEASE_EVIDENCE_COMPLETE`, means the
+**provided attestations** are internally consistent. It does not independently
+verify PRs, build logs or host deployments; review the evidence references
+before claiming a production fix.
+
+Read [v1.4 playbook](references/v14-playbook.md) for schemas, verdicts,
+failure modes, privacy limits and integration guidance. This is an addition
+to the existing 13 ghost classes, not a new set of classes.
 
 ## The protocol in one screen
 
@@ -122,15 +158,17 @@ read-only, same tool budget, with both transcripts summarised:
 It is a single pair of runs on one scenario: a worked example of what the
 protocol changes, not a measurement of how often.
 
-**3. Reproducible tests (run them).** The two scanners have regression
-tests on small local fixtures, no database needed:
+**3. Reproducible tests (run them).** Both scanners and all three v1.4 gates have regression
+tests on synthetic local fixtures, no database needed:
 
 ```bash
 npm install
 npm test
 ```
 
-They pin the classification of plain, whitespace-broken, variable-built,
+The v1.4 toolkit also tests stalled/active pipelines, unsafe bulk actions,
+release gate failure states, missing evidence and strict CLI exit codes.
+The original scanner tests pin the classification of plain, whitespace-broken, variable-built,
 conditional and rebound chains, scope separation including nested shadowing
 and closures over an outer variable, non-table `.from()` calls, select-list
 parsing (casts, aliases, JSON paths, embeds, unsupported items), missing
