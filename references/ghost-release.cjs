@@ -10,6 +10,7 @@ const e = require('./lib/evidence.cjs');
 function release(input) {
   e.requireObject(input, 'input');
   const change = e.text(input.change, 'change');
+  const environmentId = e.text(input.environmentId, 'environmentId');
   const expectedMergeSha = e.text(input.expectedMergeSha, 'expectedMergeSha');
   const observedAt = e.timestamp(input.observedAt, 'observedAt');
   const maxSmokeAgeMinutes = e.positiveInteger(input.maxSmokeAgeMinutes ?? 120, 'maxSmokeAgeMinutes');
@@ -26,7 +27,9 @@ function release(input) {
   const smokeAt = smoke.observedAt ? e.timestamp(smoke.observedAt, 'smoke.observedAt') : null;
   const smokeAgeMinutes = smokeAt === null ? null : Math.round((observedAt - smokeAt) / 60000);
   const migrationRequired = e.boolean(migration.required, 'migration.required');
+  const environmentMatches = deploy.environmentId === environmentId && smoke.environmentId === environmentId;
   const checks = {
+    environmentMatches,
     merged: asFlag(pr.merged, 'pullRequest.merged'),
     mergeShaMatches: pr.mergeSha ? pr.mergeSha === expectedMergeSha : null,
     presentInMain: asFlag(main.containsMergeSha, 'main.containsMergeSha'),
@@ -52,7 +55,9 @@ function release(input) {
   const hasReceipts = Object.values(sourceRefs).every(s => typeof s === 'string' && s.trim().length > 0);
   let status = 'RELEASE_EVIDENCE_COMPLETE';
   let summary = 'Supplied release evidence is internally consistent. Verify referenced sources independently before claiming a production fix.';
-  if (checks.merged === false) {
+  if (!environmentMatches) {
+    status = 'ENVIRONMENT_MISMATCH'; summary = 'Deployment and smoke test must attest to the same explicit environment.';
+  } else if (checks.merged === false) {
     status = 'FIX_PREPARED'; summary = 'The pull request has not been merged.';
   } else if (checks.merged === true && checks.mergeShaMatches === false) {
     status = 'COMMIT_MISMATCH'; summary = 'The claimed merge commit differs from expectedMergeSha.';
@@ -73,6 +78,7 @@ function release(input) {
   return {
     tool: 'Ghost Release',
     change,
+    environmentId,
     status,
     safe: status === 'RELEASE_EVIDENCE_COMPLETE',
     summary,
