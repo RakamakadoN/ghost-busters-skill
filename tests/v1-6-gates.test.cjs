@@ -231,3 +231,13 @@ test('human alert: future escalation is rejected',()=>{
   const x=alert();x.escalatedAt='2026-10-23T12:00:00Z';
   assert.throws(()=>assessHumanAlert(x),/Escalation timestamp/);
 });
+
+test('Hunter: late human acknowledgement opens an SLA violation alert',()=>{
+  const c={version:1,checks:[{id:'sla',mode:'human-alert',
+    source:{kind:'file',path:'synthetic'},openAfter:1}]};
+  const late=alert();late.acknowledgedAt='2026-10-23T09:59:00Z';
+  const r=evolve(c,initialState(),{sla:late},'2026-10-23T10:05:00Z');
+  assert.equal(r.report.checks[0].status,'ACKNOWLEDGED_LATE');
+  assert.equal(r.report.checks[0].classification,'BAD');
+  assert.equal(r.report.summary.open,1);
+});
