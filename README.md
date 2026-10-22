@@ -155,6 +155,26 @@ node references/scan-select-columns.cjs src \
 
 (When installed as a skill, prefix the paths with `.claude/skills/ghost-busters/`.)
 
+For mixed query libraries, supply an **explicit syntactic root filter** with
+`--client-root` (repeatable) to either scanner, for example:
+
+```bash
+node references/scan-unbounded-reads.cjs src --client-root supabase --client-root db --json
+node references/scan-select-columns.cjs src --types src/types/database.types.ts --client-root supabase --json
+```
+
+This filters receiver names such as `supabase.schema('public').from(...)`.
+It is **not type inference**: an unrelated library aliased to `db` can still
+match, and genuine Supabase clients under other names can be missed. Without
+the option the scanners keep their previous broad discovery behavior.
+
+The row-cap scanner also flags `EARLY_EXECUTION` when an observed `await q`
+or `q.then(...)` can initiate a query before an unconditional
+`q.limit(...)` / `q.range(...)` / single-row bound. This is a conservative
+source-order signal, not full JavaScript control-flow or runtime proof.
+
+
+
 Both walk every supabase-js `.from(` chain with the TypeScript compiler API,
 follow chains assembled through a variable by resolving later calls to that
 variable's declaration through lexical scopes (a shadowing `const q` in an
@@ -194,6 +214,20 @@ npm test
 node benchmark/row-cap-30.cjs
 node benchmark/adversarial-30.cjs
 ```
+
+## Additional adversarial regressions
+
+`tests/adversarial-origin-order.test.cjs` contains new targeted cases for
+foreign `.from()` APIs, receiver-root scoping of both scanners, and thenable
+execution before versus after bounds. These tests are separate from the
+original 60 fixtures and do not increase their scored denominator. They were
+chosen after inspecting the implementation, so they are **not blind tests**.
+`npm test` includes them and all prior regression suites.
+
+The optional GitHub Actions workflow under
+`.github/workflows/scanner-checks.yml` runs the same regression suite and
+two fixture benchmarks on supported events. A workflow file alone is not
+proof that Actions executed or passed.
 
 ## Adapting
 
