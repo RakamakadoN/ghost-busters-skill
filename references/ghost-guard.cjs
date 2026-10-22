@@ -11,11 +11,16 @@ const path = require('node:path');
 const {
   assessPulse, assessImpact, assessRelease, assessEnvironment
 } = require('./lib/guardrails.cjs');
+const {
+  assessRuntimeIdentity, assessHumanAlert, assessRegressionEvidence
+} = require('./lib/v1-6-gates.cjs');
 
 const commands = {pulse: assessPulse, impact: assessImpact,
-  release: assessRelease, environment: assessEnvironment};
+  release: assessRelease, environment: assessEnvironment,
+  'runtime-identity': assessRuntimeIdentity, 'human-alert': assessHumanAlert,
+  regression: assessRegressionEvidence};
 function usage() {
-  console.error('Usage: node references/ghost-guard.cjs <pulse|impact|release|environment> --input <summary.json> [--json] [--strict]');
+  console.error('Usage: node references/ghost-guard.cjs <pulse|impact|release|environment|runtime-identity|human-alert|regression> --input <summary.json> [--json] [--strict]');
   console.error('Offline, read-only; no network calls or production writes.');
 }
 function main(argv) {
@@ -33,7 +38,7 @@ function main(argv) {
     const result=commands[command](data);
     if (argv.includes('--json')) console.log(JSON.stringify(result,null,2));
     else {
-      console.log('GHOST BUSTERS v1.4 — '+command.toUpperCase());
+      console.log('GHOST BUSTERS v1.6 — '+command.toUpperCase());
       console.log('STATUS: '+result.status);
       console.log('EVIDENCE: '+JSON.stringify(result.observed));
       if (result.blockers?.length) console.log('BLOCKERS: '+result.blockers.join('; '));
@@ -44,7 +49,10 @@ function main(argv) {
       (command==='pulse' && result.status!=='PROGRESS_OBSERVED') ||
       (command==='impact' && !result.releaseAllowed) ||
       (command==='release' && !result.verified) ||
-      (command==='environment' && !result.canClaimProduction)
+      (command==='environment' && !result.canClaimProduction) ||
+      (command==='runtime-identity' && !result.corroborated) ||
+      (command==='human-alert' && !result.humanConfirmed) ||
+      (command==='regression' && !result.evidenceRecorded)
     )) return 1;
     return 0;
   } catch (err) {
