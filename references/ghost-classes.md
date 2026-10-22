@@ -104,7 +104,7 @@ sort key unique: `count(*)` vs `count(distinct key)` (an order number was
 UNBOUNDED, excluding insert/update/delete/upsert, grouped by table — the same
 dump gives the "readers" column. Grep reports false "unbounded" where a query
 is assembled in parts. The first live raid: 916 chains, 280 unpaged reads over
-181 tables, 4 screens truncating now, 4 on the threshold, 3 PRs the same day.
+181 tables, 4 screens truncating now, 4 on the threshold; 3 fixes merged over the following days.
 
 **Trap.** A fake API client with a fixture of 1 050–1 500 rows and a group of
 equal keys on the page boundary. The fake passes through **every** filter
