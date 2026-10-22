@@ -32,7 +32,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { loadTypescript, walkSources, literalText, isTableFrom, chainAbove, followVariable } = require('./lib/chains.cjs');
+const { loadTypescript, walkSources, literalText, isTableFrom, isDynamicTableFrom, chainAbove, followVariable } = require('./lib/chains.cjs');
 
 const args = process.argv.slice(2);
 const VALUE_OPTS = new Set(['--cap', '--table']);
@@ -100,19 +100,23 @@ function classify(calls, rebound) {
   return { kind: 'UNBOUNDED' };
 }
 
-const AT_RISK = (f) => f.kind === 'UNBOUNDED' || f.kind === 'CONDITIONAL' || f.kind === 'UNKNOWN' || f.kind === 'RANGE_SINGLE' || !!f.falseCeiling || !!f.uncertainBound;
+const AT_RISK = (f) => f.kind === 'UNBOUNDED' || f.kind === 'CONDITIONAL' || f.kind === 'UNKNOWN' || f.kind === 'RANGE_SINGLE' || f.kind === 'DYNAMIC_TABLE' || !!f.falseCeiling || !!f.uncertainBound;
 
 const findings = [];
 for (const file of walkSources(srcDir)) {
   const text = fs.readFileSync(file, 'utf8');
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const visit = (node) => {
-    if (isTableFrom(ts, node)) {
+    if (isTableFrom(ts, node) || isDynamicTableFrom(ts, node)) {
       const table = literalText(ts, node.arguments[0]);
       const { calls, top } = chainAbove(ts, node);
       const viaVar = followVariable(ts, top, sf, node);
       const all = calls.concat(viaVar.calls);
       const cls = classify(all, viaVar.rebound);
+      if (isDynamicTableFrom(ts, node) && cls.kind !== 'WRITE' && cls.kind !== 'NOSELECT') {
+        cls.kind = 'DYNAMIC_TABLE';
+        cls.note = 'nonliteral table name; verify query target';
+      }
       const order = all.filter((c) => c.name === 'order').map((c) => literalText(ts, c.args[0])).filter(Boolean);
       const { line } = sf.getLineAndCharacterOfPosition(node.expression.name.getStart(sf));
       findings.push({
