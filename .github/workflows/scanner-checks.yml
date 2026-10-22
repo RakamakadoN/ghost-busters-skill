@@ -28,3 +28,12 @@ jobs:
         run: node benchmark/row-cap-30.cjs --strict
       - name: Adversarial fixture benchmark
         run: node benchmark/adversarial-30.cjs --strict
+
+      - name: Controlled comparison (Ghost Busters vs regex baseline)
+        run: node benchmark/comparative-30.cjs
+      - name: Upload controlled comparison results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: controlled-comparative-30
+          path: benchmark/comparative-results.json
