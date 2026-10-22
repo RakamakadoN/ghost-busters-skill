@@ -163,10 +163,37 @@ and print file:line findings grouped by table. A bound that exists on only
 one control-flow path is reported as CONDITIONAL, a variable bound to two
 different queries as UNKNOWN (the column scanner then checks only the
 direct part of each chain), a literal `.range(0, 999)` as one page rather
-than pagination. The second scanner needs the generated Supabase
+than pagination. The row-cap scanner also reports nonliteral table names as DYNAMIC_TABLE, dynamic
+limits as UNCERTAIN_BOUND, and computed .range(...) calls as
+UNVERIFIED_PAGINATION. Those are **review candidates**, not confirmed bugs.
+Even a .range(...) inside a loop does not prove termination, stable ordering
+or that all pages were fetched. The second scanner needs the generated Supabase
 types and prints how old they are. Their analysis limits are listed at the
 top of `references/lib/chains.cjs`; a finding is a call site to check, not a
 proven bug, and a clean scan is not proof of absence.
+
+## Benchmark fixtures and label audit
+
+Two reproducible row-cap scanner fixtures live in `benchmark/row-cap-30.cjs`
+and `benchmark/adversarial-30.cjs` (30 cases each). They exercise known
+heuristics; they are **not independent blind tests of the eight-phase skill**
+and cannot establish production precision, recall, or completeness.
+
+On 2026-10-22 two previously scored "safe" cases —
+`range-computed` and `computed-range` — were explicitly reclassified as
+review-only. A computed range can represent one page rather than a complete
+pagination loop. This reduces the scored denominator from 45 to 43 across
+both suites (17 cases require review rather than the previous 15). These are
+**post-hoc label corrections** recorded in Git history, not new independent
+evidence of accuracy. The other labels remain fixture-specific.
+
+Run:
+
+```bash
+npm test
+node benchmark/row-cap-30.cjs
+node benchmark/adversarial-30.cjs
+```
 
 ## Adapting
 
