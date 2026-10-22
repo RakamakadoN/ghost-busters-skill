@@ -51,7 +51,7 @@ function uniqueStrings(values, name) {
   const seen = new Set();
   values.forEach((v, index) => {
     text(v, name + '[' + index + ']');
-    if (seen.has(v)) throw new TypeError(name + ' has duplicate id ' + v);
+    if (seen.has(v)) throw new TypeError(name + ' contains duplicate identifiers');
     seen.add(v);
   });
   return seen;
@@ -73,7 +73,9 @@ function loadCli(argv) {
     }
   }
   if (!input) throw new TypeError('--input <path> is required');
-  const data = JSON.parse(fs.readFileSync(input, 'utf8'));
+  let data;
+  try { data = JSON.parse(fs.readFileSync(input, 'utf8')); }
+  catch { throw new TypeError('cannot read a valid JSON evidence document'); }
   return { data: requireObject(data, 'input'), json, strict };
 }
 function runCli(evaluate) {
