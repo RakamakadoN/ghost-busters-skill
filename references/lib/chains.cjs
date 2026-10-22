@@ -280,12 +280,26 @@ function followVariable(ts, top, sf, fromCall) {
     return found;
   };
 
+  const executions = [];
+  const isBoundReference = (n) => {
+    while (n && (ts.isParenthesizedExpression(n) || ts.isNonNullExpression(n) || ts.isAsExpression(n))) n = n.expression;
+    return !!n && ts.isIdentifier(n) && n.text === ident && resolveBinding(ts, n) === binding;
+  };
   const calls = [];
   let rebound = false;
   // The declaration's own initializer, when our chain is an assignment elsewhere, may hold another query.
   if (ts.isVariableDeclaration(binding) && binding !== p && binding.initializer && !rootsIn(binding.initializer) && containsOtherFrom(binding.initializer)) rebound = true;
   const shared = ancestorsUpTo(fromCall, scope);
   const visit = (n) => {
+    // Supabase's thenable executes on await/.then; a later limit cannot affect that request.
+    if (ts.isAwaitExpression(n) && isBoundReference(n.expression) && n.getStart(sf) > fromCall.getStart(sf)) {
+      executions.push(n.getStart(sf));
+    }
+    if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) &&
+        ['then', 'catch', 'finally'].includes(n.expression.name.text) &&
+        isBoundReference(n.expression.expression) && n.getStart(sf) > fromCall.getStart(sf)) {
+      executions.push(n.getStart(sf));
+    }
     if (n !== p && ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(n.left) && n.left.text === ident && resolveBinding(ts, n.left) === binding) {
       if (!rootsIn(n.right) && containsOtherFrom(n.right)) rebound = true;
     }
@@ -295,7 +309,7 @@ function followVariable(ts, top, sf, fromCall) {
     ts.forEachChild(n, visit);
   };
   visit(scope);
-  return { ident, calls, rebound };
+  return { ident, calls, rebound, executions };
 }
 
 module.exports = { loadTypescript, walkSources, literalText, isTableFrom, isDynamicTableFrom, fromReceiverRoot, explicitSchema, chainAbove, followVariable, isConditionalBetween, resolveBinding };
