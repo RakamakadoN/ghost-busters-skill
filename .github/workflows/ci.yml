@@ -1,36 +1,15 @@
-name: Ghost Busters CI
-
+name: Validate Diyaz Forge
 on:
   push:
-    branches:
-      - main
-      - "feat/**"
   pull_request:
-
 permissions:
   contents: read
-
 jobs:
-  regression:
-    name: Scanner + v1.5 Autonomous Hunter Tests
+  lint-skill:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Node 22
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install dev dependencies
-        run: npm install --ignore-scripts --no-audit --no-fund
-      - name: Regression suite
-        run: npm test
-      - name: Synthetic guard smoke checks
-        run: |
-          node references/ghost-guard.cjs pulse --input examples/pulse-suspected.json --json
-          node references/ghost-guard.cjs impact --input examples/impact-blocked.json --json
-          node references/ghost-guard.cjs release --input examples/release-unverified.json --json
-          node references/ghost-guard.cjs environment --input examples/environment-mismatch.json --json
-      - name: Autonomous Hunter synthetic two-run demonstration
-        run: node references/hunter-demo.cjs
+      - run: npm test

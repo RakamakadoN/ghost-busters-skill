@@ -1,5 +1,5 @@
 node_modules/
-package-lock.json
-
-# Hunter state and generated reports must never be committed
-.ghost-hunter/
+*.zip
+.env
+.env.*
+!.env.example
