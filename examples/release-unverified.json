@@ -1,0 +1,11 @@
+{
+  "prMerged": true,
+  "commitInMain": true,
+  "requiredCiPassed": true,
+  "deploymentContainsFix": null,
+  "productionSmokePassed": null,
+  "environmentVerified": null,
+  "migrations": {
+    "required": false
+  }
+}
