@@ -14,6 +14,7 @@ const time = (hour) => '2026-10-22T' + String(hour).padStart(2, '0') + ':00:00Z'
 function pulseInput() {
   return {
     pipeline: 'example-order-import',
+    environmentId: 'synthetic-test',
     observedAt: time(16),
     window: { start: '2026-10-20T00:00:00Z', end: time(16) },
     activityExpected: true,
@@ -43,15 +44,16 @@ function impactInput() {
 function releaseInput() {
   return {
     change: 'Example PR',
+    environmentId: 'synthetic-test',
     expectedMergeSha: 'a1b2c3',
     observedAt: time(16),
     maxSmokeAgeMinutes: 120,
     pullRequest: { merged: true, mergeSha: 'a1b2c3', evidenceRef: 'fixture://pr' },
     main: { containsMergeSha: true, evidenceRef: 'fixture://main' },
     ci: { requiredChecksPassed: true, evidenceRef: 'fixture://ci' },
-    deployment: { sha: 'deployed987', containsMergeSha: true, evidenceRef: 'fixture://deployment' },
+    deployment: { environmentId: 'synthetic-test', sha: 'deployed987', containsMergeSha: true, evidenceRef: 'fixture://deployment' },
     migration: { required: false },
-    smoke: { testedDeploymentSha: 'deployed987', passed: true, observedAt: time(15), evidenceRef: 'fixture://smoke' }
+    smoke: { environmentId: 'synthetic-test', testedDeploymentSha: 'deployed987', passed: true, observedAt: time(15), evidenceRef: 'fixture://smoke' }
   };
 }
 
@@ -185,6 +187,11 @@ test('release: merged but not in main remains AWAITING_MAIN', () => {
   const x = releaseInput();
   x.main.containsMergeSha = false;
   assert.equal(release(x).status, 'AWAITING_MAIN');
+});
+test('release: wrong deployment environment fails closed', () => {
+  const x = releaseInput();
+  x.smoke.environmentId = 'staging';
+  assert.equal(release(x).status, 'ENVIRONMENT_MISMATCH');
 });
 test('release: missing/failed required CI must not pass', () => {
   const x = releaseInput();
