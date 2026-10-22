@@ -61,6 +61,13 @@ function literalText(ts, node) {
 }
 
 /** Is this `.from(...)` call a supabase-js table read, and not storage / Array.from / another API? */
+function fromReceiverRoot(ts, node) {
+  if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression) || node.expression.name.text !== 'from') return null;
+  let root = node.expression.expression;
+  while (ts.isPropertyAccessExpression(root) || ts.isCallExpression(root) || ts.isNonNullExpression(root) || ts.isParenthesizedExpression(root)) root = root.expression;
+  return ts.isIdentifier(root) ? root.text : null;
+}
+
 function isTableFromCandidate(ts, node) {
   if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression) || node.expression.name.text !== 'from') return false;
   const recv = node.expression.expression;
@@ -291,4 +298,4 @@ function followVariable(ts, top, sf, fromCall) {
   return { ident, calls, rebound };
 }
 
-module.exports = { loadTypescript, walkSources, literalText, isTableFrom, isDynamicTableFrom, explicitSchema, chainAbove, followVariable, isConditionalBetween, resolveBinding };
+module.exports = { loadTypescript, walkSources, literalText, isTableFrom, isDynamicTableFrom, fromReceiverRoot, explicitSchema, chainAbove, followVariable, isConditionalBetween, resolveBinding };
