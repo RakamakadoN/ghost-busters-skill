@@ -8,6 +8,7 @@ on:
       - "references/**"
       - "examples/**"
       - "README.md"
+      - "CHANGELOG.md"
       - "CUSTOMIZE.md"
       - "LICENSE"
       - "package.json"
@@ -35,13 +36,14 @@ jobs:
       - name: Build clean marketplace ZIP
         run: |
           zip -q -r ghost-busters-community-v1.6.zip \
-            SKILL.md README.md CUSTOMIZE.md LICENSE package.json references examples \
+            SKILL.md README.md CHANGELOG.md CUSTOMIZE.md LICENSE package.json references examples \
             -x 'examples/private-hunter-workflow.yml' 'examples/hunter.live.example.json'
           unzip -Z1 ghost-busters-community-v1.6.zip | grep -qx 'SKILL.md'
           unzip -Z1 ghost-busters-community-v1.6.zip | grep -qx 'references/ghost-hunter.cjs'
           unzip -Z1 ghost-busters-community-v1.6.zip | grep -qx 'references/lib/hunter.cjs'
           unzip -Z1 ghost-busters-community-v1.6.zip | grep -qx 'references/lib/v1-6-gates.cjs'
           unzip -Z1 ghost-busters-community-v1.6.zip | grep -qx 'references/v1.6-guards.md'
+          unzip -Z1 ghost-busters-community-v1.6.zip | grep -qx 'CHANGELOG.md'
           unzip -t ghost-busters-community-v1.6.zip | tail -n 1
       - name: Upload Agensi-ready ZIP
         uses: actions/upload-artifact@v4
