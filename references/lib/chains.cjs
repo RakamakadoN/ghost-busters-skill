@@ -22,8 +22,8 @@
  *    the scanner does no dataflow and will not guess which query a later
  *    method applies to.
  *  - `.range(a, b)` with two numeric literals is one page, not pagination;
- *    `.range()` with computed bounds is assumed to be a paging loop — the
- *    scanner does not prove that every page is loaded.
+ *    `.range()` with computed bounds does not prove page iteration — the
+ *    row-cap scanner flags it for manual completeness review.
  *  - `.storage.from(...)` and `Array.from(...)` are not table reads.
  */
 
