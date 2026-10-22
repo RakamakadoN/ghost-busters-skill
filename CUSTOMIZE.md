@@ -1,6 +1,6 @@
 # Adapting Ghost Busters to your project
 
-The algorithm and the class catalogue are universal. Six things are yours.
+The algorithm and the class catalogue are universal. Seven things are yours.
 Fill them in once, keep them next to the skill (a `project.md` in the skill
 folder, or your `CLAUDE.md` / `AGENTS.md`), and the hunt stops asking.
 
@@ -75,6 +75,32 @@ first hypothesis until it has a relevant answer or can say there is none —
 usually one to four queries, never a fixed count. If you have no memory store yet, start one: a
 folder of postmortems with a consistent header (symptom, root cause,
 resolution, rejected hypotheses, future guidance) is enough for grep.
+
+## 7. v1.4 evidence collection and release receipts
+
+The offline `Ghost Pulse`, `Ghost Impact` and `Ghost Release` tools evaluate
+supplied snapshots; **they do not query GitHub, PostgreSQL or your deployment
+platform**. Define how an authorized operator will collect evidence without
+writes and how source references can be independently verified.
+
+| Requirement | Your source / rule |
+| --- | --- |
+| Immutable environment identity (project ref / deployment environment, not a display name) | |
+| Pipeline working calendar and expected activity windows | |
+| Stable source content fingerprint and approved read-only capture method | |
+| Independent upstream activity signal and downstream business-progress event | |
+| Same-role/same-query before and after comparison; canonical stale/actionable predicates | |
+| Where merge SHA, required checks and deployed commit ancestry are verified | |
+| Live smoke procedure, deployed SHA, freshness bound, and evidence receipt link | |
+| Allowed retention / redaction / log storage for local evidence files | |
+
+For release evidence, distinguish **a green PR**, **the commit merged to main**,
+**the version actually deployed**, **schema migrations applied**, and a
+**smoke result for that exact deployed version**. If a gate requires a
+migration approved by the owner, stop with `MIGRATION_BLOCKED`, never apply
+it opportunistically.
+
+See [the v1.4 playbook](references/v14-playbook.md) and synthetic fixtures.
 
 ## Stack notes
 
