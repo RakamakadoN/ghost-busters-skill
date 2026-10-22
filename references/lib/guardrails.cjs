@@ -201,10 +201,13 @@ function assessRelease(input) {
   const migrations = obj(x.migrations, 'migrations');
   if (typeof migrations.required !== 'boolean') throw new TypeError('migrations.required must be boolean');
   flags.migrationApplied = migrations.required ? nullableBool(migrations.applied, 'migrations.applied') : true;
-  let ordered = true;
-  if (x.deployedAt != null || x.smokeObservedAt != null) {
-    if (!x.deployedAt || !x.smokeObservedAt) ordered = false;
-    else ordered = timestamp(x.smokeObservedAt,'smokeObservedAt') >= timestamp(x.deployedAt,'deployedAt');
+  // A boolean smoke assertion without timestamp provenance is not enough to
+  // claim "verified in production". A missing timestamp is unknown, while a
+  // negative chronology is an explicit blocker.
+  let ordered = null;
+  if (x.deployedAt != null && x.smokeObservedAt != null) {
+    ordered = timestamp(x.smokeObservedAt,'smokeObservedAt') >=
+      timestamp(x.deployedAt,'deployedAt');
   }
   const blockers = [];
   const pending = [];
@@ -217,7 +220,7 @@ function assessRelease(input) {
   if (blockers.length) status='BLOCKED';
   else if (flags.prMerged!==true || flags.commitInMain!==true) status='FIX_PREPARED';
   else if (flags.deploymentContainsFix!==true) status='MERGED_NOT_DEPLOYED';
-  else if (flags.productionSmokePassed!==true || flags.environmentVerified!==true || !ordered) status='DEPLOYED_UNVERIFIED';
+  else if (flags.productionSmokePassed!==true || flags.environmentVerified!==true || ordered!==true) status='DEPLOYED_UNVERIFIED';
   else if (flags.requiredCiPassed===true && flags.migrationApplied===true) status='VERIFIED_IN_PRODUCTION';
   else status='BLOCKED';
   return {tool:'release',status,verified:status==='VERIFIED_IN_PRODUCTION',flags,
