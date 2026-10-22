@@ -5,7 +5,7 @@
   "description": "Claude Code skill for hunting bugs that never crash — plus two static scanners for supabase-js call sites",
   "license": "MIT",
   "scripts": {
-    "test": "node --test tests/scanners.test.cjs"
+    "test": "node --test tests/*.test.cjs"
   },
   "devDependencies": {
     "typescript": "^5.6.0"
