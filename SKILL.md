@@ -2,7 +2,7 @@
 name: ghost-busters
 description: Use when a number, screen, task feed, sync, cron job or report in a CRM/ERP looks wrong or suspiciously quiet — "the total doesn't match the accounting system", "the screen shows 0", "tasks are firing for no reason", "the sync is silent", "tests are green but the page is broken", "nothing arrived", a regression after a fix, any silent failure — and before proposing any fix. Also use for a proactive sweep ("raid") of a module for known ghost classes.
 metadata:
-  version: 1.3.0
+  version: 1.4.0
   origin: distilled from ~60 production incidents in a React + Supabase CRM/ERP
 ---
 
@@ -74,6 +74,43 @@ Rules that hold in every mode:
   code ≠ production claim. A report that records its limits is complete; a
   report that fills every line with guesses is not.
 
+## Evidence gates — v1.4 (offline, reproducible)
+
+The eight hunt phases still apply. v1.4 adds four **evidence evaluators**, not
+four new ghost classes. They accept **operator-prepared aggregate JSON only**,
+never connect to production and never send messages, deploy, or change data:
+
+| Gate | Use it | Clear state (not a license to write) |
+|---|---|---|
+| **Environment** | Before citing production figures: is this the database the deployed app really uses? | `VERIFIED_CANDIDATE` |
+| **Pulse** | Class 1: scheduled job green, source maybe frozen, business activity continues | `PROGRESS_OBSERVED` = no stall sign in this window |
+| **Impact** | Before changing a cap, filter, permission or eligibility predicate; bulk actions at risk | `CLEAR` only after newly exposed rows/actions/dependencies were reviewed |
+| **Release** | Before saying an incident was fixed for users | `VERIFIED_IN_PRODUCTION` requires merge, CI, deployed artifact, applicable migrations, environment and post-deploy smoke |
+
+```bash
+node references/ghost-guard.cjs environment --input <redacted-env-summary.json> --json
+node references/ghost-guard.cjs pulse       --input <activity-summary.json> --json
+node references/ghost-guard.cjs impact      --input <fix-impact-summary.json> --strict
+node references/ghost-guard.cjs release     --input <release-evidence.json> --strict
+```
+
+For input schemas, positive/negative examples, status meanings and safety limits,
+see [references/v1.4-guards.md](references/v1.4-guards.md). Never submit
+customer records, secrets, URLs containing access tokens, payment records or
+raw exports as JSON. If provenance is absent, label conclusions *hypothesis*.
+A JSON assertion is not independent proof that a production observation exists.
+
+Do not downgrade `SUSPECTED_SILENT_FAILURE` to "healthy" merely because the
+scheduler succeeded. Do not override `BLOCKED` or `REVIEW_REQUIRED` from
+Impact and Release on the grounds that CI passed. A release test cannot verify
+itself: require the running version and real role, not just a PR commit.
+
+**Evidence ledger:** use [references/evidence-ledger.md](references/evidence-ledger.md)
+to separate observed incidents, reproductions, deployment proof and independent
+review, without exposing a customer's private data. For finance-specific
+invariants, see [references/finance-invariants.md](references/finance-invariants.md);
+they are optional project-specific templates, not tax or financial advice.
+
 ## The hunt
 
 ```
@@ -119,6 +156,8 @@ observation. "Memory says it is not a bug" goes in the report as a lead with
 its date, not as a finding.
 
 ### 2. Instruments — observe before explaining
+
+Verify the deployed **environment identity** first; the Supabase project display name is not proof. Run the offline Environment gate when a safe aggregate summary is available. For a green sync or stalled pipeline, run Pulse on independent source/downstream evidence and check working hours/latency.
 
 Identify the ghost class in `references/ghost-classes.md` and run its probes
 from `references/probes.sql` (all read-only). Minimum set for any "money or
@@ -187,7 +226,7 @@ A ghost you cannot catch twice will come back. Before any change:
 
 ### 5. Exorcism — fix with the neighbours in view
 
-Four report lines before editing:
+Four report lines before editing (also evaluate the offline Impact gate whenever visibility or eligible actions expand):
 
 1. **What else hangs on this code** — every caller, every screen over the same
    view/RPC, every metric with the same predicate. A regression is the worst
@@ -234,7 +273,11 @@ A "green dashboard" without a proven alarm channel means nothing.
 
 Ticket: current state, evidence, next step, do not repeat → project state file
 → engineering memory, confirmed conclusions only (`INCIDENT`, `KNOWN_PITFALL`,
-`REJECTED_HYPOTHESIS`, `PRODUCTION_BEHAVIOR`). Recording a rejected hypothesis
+`REJECTED_HYPOTHESIS`, `PRODUCTION_BEHAVIOR`). Also record the independent
+release status: PR opened ≠ merged ≠ deployed ≠ verified. Run the Release gate
+with deploy evidence and a post-deploy smoke test before reporting FIXED.
+Record a private evidence-ledger row (tier T0–T4), never public raw CRM data.
+Recording a rejected hypothesis
 is mandatory: it saves the next engineer a day.
 
 ### Raid — after one catch, look for siblings
@@ -330,6 +373,10 @@ GHOST       <class> · <symptom in one sentence: number, screen, period>
 ARCHIVE     memory: <N entries, key ids> · notes: <files> · ticket: <id, do-not-repeat>
             REJECTED: <what is already disproved and will not be repeated>
 INSTRUMENTS <probe → result> … (production read-only, timestamp UTC) | not taken: <why>
+ENVIRONMENT <expected ref / deployed ref / observed ref verified?> · role · evidence, or UNVERIFIED
+PULSE       <execution + freshness + progress + independent signal> · status / N/A
+IMPACT      <newly eligible data + actions + unsafe count + dependencies> · status / N/A
+RELEASE     <PR → main → CI → deploy → migration → post-deploy test> · status / NOT YET
 TRAIL       <screen → service → RPC → table → writer → schedule>; single path: yes/no/not verified
 DIAGNOSIS   <root cause> · confidence: proven/hypothesis · what would disprove it
 TRAP        <test/script> · RED: <output before the fix>

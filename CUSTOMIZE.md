@@ -1,6 +1,6 @@
 # Adapting Ghost Busters to your project
 
-The algorithm and the class catalogue are universal. Six things are yours.
+The algorithm and the class catalogue are universal. Six foundational things are yours, plus optional v1.4 evidence-gate settings.
 Fill them in once, keep them next to the skill (a `project.md` in the skill
 folder, or your `CLAUDE.md` / `AGENTS.md`), and the hunt stops asking.
 
@@ -75,6 +75,25 @@ first hypothesis until it has a relevant answer or can say there is none —
 usually one to four queries, never a fixed count. If you have no memory store yet, start one: a
 folder of postmortems with a consistent header (symptom, root cause,
 resolution, rejected hypotheses, future guidance) is enough for grep.
+
+## 7. v1.4 evidence-gate settings (optional)
+
+The guards are offline checkers. **Do not put secrets or private live data
+into this skill repository.** Provide only authorized aggregate summaries.
+
+| Gate | Configuration to collect | Provenance / reviewer |
+|---|---|---|
+| Environment | expected project reference, reference observed from connection, reference configured in the *deployed* app, nonempty anchor count, read-only operator role | deployment environment settings + database count (no full data export) |
+| Pulse | actual business timezone, weekdays and business hours; expected latency; upstream independent activity signal; source fingerprints; downstream progress; sampling cadence | two independent systems, timestamped; exceptions for holidays and inactivity |
+| Impact | bulk-action inventory, newly visible row counts, source-of-truth eligibility predicate, stale record classification, blocker/dependency checks | review by module owner; **no actual sending** |
+| Release | PR+merge revision, required checks, deployed artifact containing fix, manually approved/applied migrations, actual post-deploy smoke under correct role | CI + hosting platform + database + business-role observation |
+| Ledger | project-private ticket and evidence storage; export permissions and sanitization policy | independently reviewed where possible |
+
+Examples and command syntax: [references/v1.4-guards.md](references/v1.4-guards.md).
+
+A gate that cannot be supplied with valid evidence reports an unknown or
+blocked state. **Never fake `environmentVerified`, `deploymentContainsFix`,
+or `hiddenRecordsReviewed` to silence it.**
 
 ## Stack notes
 

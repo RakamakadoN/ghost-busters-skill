@@ -1,0 +1,21 @@
+{
+  "beforeVisible": 1000,
+  "afterVisible": 1682,
+  "hiddenRecordsReviewed": true,
+  "unsafeNewRecords": 402,
+  "bulkActionsReviewed": true,
+  "dependencyReviewComplete": true,
+  "bulkActions": [
+    {
+      "name": "Bulk send",
+      "canActOnNewRecords": true,
+      "safeguardsVerified": false
+    }
+  ],
+  "dependencyChecks": [
+    {
+      "id": "stale-draft-cleanup",
+      "passed": false
+    }
+  ]
+}
