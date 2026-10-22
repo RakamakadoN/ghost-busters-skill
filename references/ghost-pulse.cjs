@@ -20,7 +20,10 @@ function pulse(input) {
   const activityExpected = e.boolean(input.activityExpected, 'activityExpected');
   const minSuccessfulRuns = e.positiveInteger(input.minSuccessfulRuns ?? 3, 'minSuccessfulRuns');
   const minSnapshots = e.positiveInteger(input.minSnapshots ?? 3, 'minSnapshots');
+  if (minSuccessfulRuns < 2 || minSnapshots < 2) throw new TypeError('at least two successful runs and two snapshots are required');
   const maxSnapshotAgeMinutes = e.positiveInteger(input.maxSnapshotAgeMinutes ?? 120, 'maxSnapshotAgeMinutes');
+  const minSnapshotSpanMinutes = e.nonNegative(input.minSnapshotSpanMinutes ?? 30, 'minSnapshotSpanMinutes');
+  const minPostUpstreamLagMinutes = e.nonNegative(input.minPostUpstreamLagMinutes ?? 30, 'minPostUpstreamLagMinutes');
 
   function within(value, name) {
     const time = e.timestamp(value, name);
@@ -65,12 +68,21 @@ function pulse(input) {
   const down = downstream.reduce((sum, row) => sum + row.count, 0);
   const fingerprints = new Set(snapshots.map(s => s.fingerprint));
   const latest = snapshots.reduce((a, b) => !a || b.at > a.at ? b : a, null);
+  const earliest = snapshots.reduce((a, b) => !a || b.at < a.at ? b : a, null);
+  const distinctCaptureTimes = new Set(snapshots.map(s => s.at)).size;
+  const sourceSnapshotSpanMinutes = earliest && latest ? Math.round((latest.at - earliest.at) / 60000) : 0;
+  const latestPositiveUpstream = upstream.filter(row => row.count > 0).reduce((a, b) => !a || b.at > a.at ? b : a, null);
+  const postUpstreamSuccessRuns = latestPositiveUpstream
+    ? successfulRuns.filter(r => r.at >= latestPositiveUpstream.at + minPostUpstreamLagMinutes * 60000).length
+    : 0;
   const latestAgeMinutes = latest ? Math.round((observedAt - latest.at) / 60000) : null;
-  const sourceStable = snapshots.length >= minSnapshots && fingerprints.size === 1;
+  const snapshotsIndependent = distinctCaptureTimes >= minSnapshots && sourceSnapshotSpanMinutes >= minSnapshotSpanMinutes;
+  const sourceStable = snapshotsIndependent && fingerprints.size === 1;
   const sourceOld = latestAgeMinutes !== null && latestAgeMinutes > maxSnapshotAgeMinutes;
   const enoughSuccess = successfulRuns.length >= minSuccessfulRuns;
   const evidenceComplete = upstream.length > 0 && downstream.length > 0 &&
-    snapshots.length >= minSnapshots && enoughSuccess;
+    snapshots.length >= minSnapshots && snapshotsIndependent && enoughSuccess &&
+    (up === 0 || postUpstreamSuccessRuns > 0);
 
   let status = 'INSUFFICIENT_EVIDENCE';
   let summary = 'Cannot establish a pipeline anomaly from the supplied evidence.';
@@ -99,6 +111,8 @@ function pulse(input) {
     'No production connectivity or side effects: results apply only to supplied records and time window.'
   ];
   if (sourceOld) warnings.unshift('Latest supplied source snapshot exceeds maxSnapshotAgeMinutes.');
+  if (up > 0 && postUpstreamSuccessRuns === 0) warnings.unshift('No successful run occurred after the independent upstream activity plus minPostUpstreamLagMinutes.');
+  if (!snapshotsIndependent) warnings.unshift('Distinct source observations and minimum span are needed; duplicate captures do not prove a freeze.');
   if (failedRuns) warnings.push('Some runs explicitly failed and require separate triage.');
   return {
     tool: 'Ghost Pulse',
@@ -117,6 +131,11 @@ function pulse(input) {
       importedRows: imported,
       distinctSourceFingerprints: fingerprints.size,
       sourceSnapshots: snapshots.length,
+      distinctCaptureTimes,
+      sourceSnapshotSpanMinutes,
+      minSnapshotSpanMinutes,
+      postUpstreamSuccessRuns,
+      minPostUpstreamLagMinutes,
       sourceStable,
       latestSnapshotAgeMinutes: latestAgeMinutes,
       sourceSnapshotStale: sourceOld,
