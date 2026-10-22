@@ -11,6 +11,7 @@ const e = require('./lib/evidence.cjs');
 function pulse(input) {
   e.requireObject(input, 'input');
   const pipeline = e.text(input.pipeline, 'pipeline');
+  const environmentId = e.text(input.environmentId, 'environmentId');
   const w = e.requireObject(input.window, 'window');
   const start = e.timestamp(w.start, 'window.start');
   const end = e.timestamp(w.end, 'window.end');
@@ -104,6 +105,7 @@ function pulse(input) {
     status,
     safe: !status.startsWith('SUSPECTED_') && status !== 'EXECUTION_FAILURE' && status !== 'INSUFFICIENT_EVIDENCE',
     pipeline,
+    environmentId,
     observedAt: input.observedAt,
     window: w,
     summary,
