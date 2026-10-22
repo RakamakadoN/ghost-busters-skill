@@ -55,7 +55,13 @@ function configFor(input) {
         throw new Error('tokenEnv must begin GHOST_HUNTER_: '+item.id);
       }
     }
-    return {id:item.id, mode:item.mode, source:item.source, openAfter, resolveAfter};
+    const maxEvidenceAgeMinutes = item.maxEvidenceAgeMinutes === undefined ? 360 : item.maxEvidenceAgeMinutes;
+    if (!Number.isInteger(maxEvidenceAgeMinutes) ||
+        maxEvidenceAgeMinutes < 1 || maxEvidenceAgeMinutes > 10080) {
+      throw new Error('maxEvidenceAgeMinutes must be 1..10080: '+item.id);
+    }
+    return {id:item.id, mode:item.mode, source:item.source, openAfter, resolveAfter,
+      maxEvidenceAgeMinutes};
   });
   const allowedHosts = input.allowedHosts === undefined ? [] : input.allowedHosts;
   if (!Array.isArray(allowedHosts) || allowedHosts.length > 20 ||
@@ -120,11 +126,21 @@ function summarise(result) {
   }
   return {};
 }
-function sampleEvidence(mode, observation) {
+function sampleEvidence(mode, observation, now, maxAge) {
   if (observation === null || observation === undefined) {
     return {status:'EVIDENCE_ERROR',metrics:{},note:'Evidence source unavailable or invalid'};
   }
   try {
+    // A successful retrieval of an old snapshot is not a fresh observation.
+    // Pulse summaries contain their own source observation timestamp.
+    if (mode === 'pulse') {
+      const stamp = Date.parse(observation.evaluatedAt);
+      const age = Date.parse(now)-stamp;
+      if (!Number.isFinite(stamp) || age < -5*60000 || age > maxAge*60000) {
+        return {status:'EVIDENCE_ERROR',metrics:{},
+          note:'Pulse evidence is stale, future-dated or missing a timestamp'};
+      }
+    }
     const result = evaluators[mode](observation);
     return {status:result.status,metrics:summarise(result),note:null};
   } catch (_) {
@@ -146,7 +162,7 @@ function evolve(config, previous, observations, now) {
     if (current.lastSeen && Date.parse(now)<Date.parse(current.lastSeen)) {
       throw new Error('Observation time precedes stored state for '+check.id);
     }
-    const found=sampleEvidence(check.mode,observations[check.id]);
+    const found=sampleEvidence(check.mode,observations[check.id],now,check.maxEvidenceAgeMinutes);
     const classification=classify(check.mode,found.status);
     const record={
       badStreak:Number.isSafeInteger(current.badStreak)&&current.badStreak>=0?current.badStreak:0,
