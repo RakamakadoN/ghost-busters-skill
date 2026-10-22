@@ -1,0 +1,35 @@
+name: Ghost Busters CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+      - 'benchmark/**'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies without lifecycle scripts
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Run scanner and safety-toolkit regressions
+        run: npm test
+      - name: Smoke test three documented synthetic evidence inputs
+        run: |
+          node references/ghost-pulse.cjs --input examples/ghost-pulse.json --json > /tmp/ghost-pulse.json
+          node references/ghost-impact.cjs --input examples/ghost-impact.json --json > /tmp/ghost-impact.json
+          node references/ghost-release.cjs --input examples/ghost-release.json --json > /tmp/ghost-release.json
+          node -e "const fs=require('fs'); const expected={pulse:'SUSPECTED_SILENT_FAILURE',impact:'BLOCKED',release:'RELEASE_EVIDENCE_COMPLETE'}; for(const [k,status] of Object.entries(expected)){const x=JSON.parse(fs.readFileSync('/tmp/ghost-'+k+'.json','utf8'));if(x.status!==status)throw Error(k+': '+x.status+' != '+status);console.log(k+': '+status)}"
