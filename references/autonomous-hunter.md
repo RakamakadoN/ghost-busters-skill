@@ -64,7 +64,7 @@ The endpoint **must be provided by the customer/operator** and serve the appropr
 
 ### Recommended schedule: every four hours in a private repository
 
-Copy [examples/private-hunter-workflow.yml](../examples/private-hunter-workflow.yml) to `.github/workflows/ghost-hunter.yml` **inside a private repository**. Update its placeholder `PIN_REVIEWED_SHA` to the exact audited release commit. Store `hunter.config.json` there; configure `GHOST_HUNTER_TOKEN` as an Actions secret.
+Copy [examples/private-hunter-workflow.yml](../examples/private-hunter-workflow.yml) to `.github/workflows/ghost-hunter.yml` **inside a private repository**. The example pins the tested v1.5 release commit. Review the pinned revision before enabling a live workflow, and update it only after validating a newer release. Store `hunter.config.json` there; configure `GHOST_HUNTER_TOKEN` as an Actions secret.
 
 The template:
 
