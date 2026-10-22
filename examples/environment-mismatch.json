@@ -1,0 +1,11 @@
+{
+  "expectedProjectRef": "production-ref",
+  "observedProjectRef": "other-project-ref",
+  "deployedProjectRef": "production-ref",
+  "accessReadOnly": true,
+  "anchor": {
+    "name": "business-records",
+    "observedRows": 0,
+    "minimumRows": 100
+  }
+}
