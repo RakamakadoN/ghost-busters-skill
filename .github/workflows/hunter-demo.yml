@@ -1,0 +1,42 @@
+name: Ghost Busters Autonomous Hunter (Synthetic Demo)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  simulated-watch:
+    name: Synthetic autonomous hunter smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Two consecutive observations open one alert
+        run: |
+          node references/ghost-hunter.cjs \
+            --config examples/hunter.config.json \
+            --state .ghost-hunter/state.json \
+            --report .ghost-hunter/report.json \
+            --markdown .ghost-hunter/report.md
+          node references/ghost-hunter.cjs \
+            --config examples/hunter.config.json \
+            --state .ghost-hunter/state.json \
+            --report .ghost-hunter/report.json \
+            --markdown .ghost-hunter/report.md
+      - name: Confirm transitions without notifying production systems
+        run: |
+          node -e "const r=require('./.ghost-hunter/report.json');if(r.summary.new<2){console.error('Expected synthetic alerts');process.exitCode=1;}"
+          cat .ghost-hunter/report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload SYNTHETIC reports only
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-autonomous-hunter-demo
+          path: |
+            .ghost-hunter/report.json
+            .ghost-hunter/report.md
+          retention-days: 7
