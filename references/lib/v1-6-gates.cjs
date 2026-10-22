@@ -137,6 +137,15 @@ function assessHumanAlert(input) {
       chronology.some(v => v > at)) {
     throw new TypeError('Alert chronology must be ordered and cannot be in the future');
   }
+  const escalated = optionalStamp(x.escalatedAt, 'escalatedAt');
+  if (escalated !== null && (escalated < detected || escalated > at)) {
+    throw new TypeError('Escalation timestamp must be after detection and before evaluation');
+  }
+  const escalationRecorded = escalated !== null &&
+    typeof x.escalationEvidenceId === 'string' && x.escalationEvidenceId.trim().length > 0;
+  const missedSla = (created !== null && created-detected > createMins*60000) ||
+    (delivered !== null && delivered-created > deliveryMins*60000) ||
+    (acknowledged !== null && acknowledged-delivered > ackMins*60000);
   const evidence = {
     delivered: delivered !== null && typeof x.deliveryEvidenceId === 'string' &&
       x.deliveryEvidenceId.trim().length > 0,
@@ -153,19 +162,21 @@ function assessHumanAlert(input) {
   else if (acknowledged === null) {
     status = at-delivered > ackMins*60000 ? 'ACK_OVERDUE' : 'ACK_PENDING';
   } else if (!evidence.acknowledged) status='ACK_UNVERIFIED';
-  else status='ACKNOWLEDGED';
+  else status=missedSla ? 'ACKNOWLEDGED_LATE' : 'ACKNOWLEDGED';
   return {
     tool: 'human-alert', status, humanConfirmed: status==='ACKNOWLEDGED',
     observed: {
       created: created!==null, delivered:delivered!==null, acknowledged:acknowledged!==null,
       independentChannel: independent && incidentChannel!==alertChannel,
       deliveryEvidenceRecorded:evidence.delivered, ackEvidenceRecorded:evidence.acknowledged,
+      escalationRecorded, missedSla,
       minutesSinceDetection:Math.floor((at-detected)/60000)
     },
     limitations: [
       'Job success and a stored alert row do not prove external delivery or human acknowledgement.',
       'Delivery and acknowledgement evidence must be checked against private provider and human records.',
-      'This gate never sends, pages, or acknowledges messages.'
+      'Overdue acknowledgement requires human escalation; a late acknowledgement is not a timely recovery.',
+      'This gate never sends, pages, escalates, or acknowledges messages.'
     ]
   };
 }

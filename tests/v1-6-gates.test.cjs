@@ -207,3 +207,27 @@ test('Hunter: stale evidence cannot resolve a previous alert',()=>{
   assert.equal(next.report.checks[0].status,'EVIDENCE_ERROR');
   assert.equal(next.report.summary.open,1);
 });
+
+test('human alert: late provider delivery remains SLA breach after eventual ACK',()=>{
+  const x=alert();x.deliveredAt='2026-10-23T09:30:00Z';
+  x.acknowledgedAt='2026-10-23T09:31:00Z';
+  assert.equal(assessHumanAlert(x).status,'ACKNOWLEDGED_LATE');
+  assert.equal(assessHumanAlert(x).humanConfirmed,false);
+});
+test('human alert: late human ACK is distinct from on-time confirmation',()=>{
+  const x=alert();x.acknowledgedAt='2026-10-23T09:55:00Z';
+  assert.equal(assessHumanAlert(x).status,'ACKNOWLEDGED_LATE');
+  assert.equal(assessHumanAlert(x).observed.missedSla,true);
+});
+test('human alert: escalation does not substitute for acknowledgement',()=>{
+  const x=alert();x.acknowledgedAt=null;
+  x.escalatedAt='2026-10-23T09:40:00Z';x.escalationEvidenceId='private-escalation';
+  const report=assessHumanAlert(x);
+  assert.equal(report.status,'ACK_OVERDUE');
+  assert.equal(report.observed.escalationRecorded,true);
+  assert.equal(JSON.stringify(report).includes('private-escalation'),false);
+});
+test('human alert: future escalation is rejected',()=>{
+  const x=alert();x.escalatedAt='2026-10-23T12:00:00Z';
+  assert.throws(()=>assessHumanAlert(x),/Escalation timestamp/);
+});
