@@ -40,6 +40,34 @@ ghost-busters/
 └── LICENSE                      MIT
 ```
 
+## New in v1.5 — Autonomous Hunter
+
+Ghost Busters now includes a deterministic runner for repeated, **read-only**
+evaluation of the four v1.4 gates. It collects aggregate JSON from permitted
+local files or specifically allowlisted HTTPS endpoints, tracks consecutive
+bad and good observations, and only reports **new incidents and recoveries**.
+Missing or stale evidence cannot make an active incident look healthy.
+
+Run the synthetic sample:
+
+```bash
+node references/ghost-hunter.cjs --config examples/hunter.config.json \
+  --state .ghost-hunter/state.json \
+  --report .ghost-hunter/report.json \
+  --markdown .ghost-hunter/report.md
+```
+
+Run it twice to open a synthetic incident. The sample does not represent
+any live deployment.
+
+**Production monitoring is not enabled in this public repository.**
+The four-hour [private scheduler template](examples/private-hunter-workflow.yml)
+can be installed in an operator-controlled private repository, connected to
+a separately configured read-only evidence source.
+
+[Full setup, safety restrictions, and alert lifecycle](references/autonomous-hunter.md).
+[Manual synthetic Actions demo](.github/workflows/hunter-demo.yml).
+
 ## What's new in v1.4.0
 
 The original eight-phase investigation process and 13 ghost classes remain intact.
