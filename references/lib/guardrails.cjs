@@ -214,7 +214,7 @@ function assessRelease(input) {
   if (flags.requiredCiPassed === false) blockers.push('required CI failed');
   if (flags.migrationApplied === false) blockers.push('required migration not applied');
   if (flags.environmentVerified === false) blockers.push('production identity mismatch');
-  if (flags.productionSmokePassed === true && !ordered) blockers.push('smoke observation predates deployment');
+  if (flags.productionSmokePassed === true && ordered === false) blockers.push('smoke observation predates deployment');
   for (const [key,val] of Object.entries(flags)) if (val !== true) pending.push(key);
   let status;
   if (blockers.length) status='BLOCKED';
