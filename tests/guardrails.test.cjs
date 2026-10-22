@@ -141,6 +141,12 @@ test('release blocks a required unapplied migration',()=>{
  const x=release();x.migrations={required:true,applied:false};
  assert.equal(assessRelease(x).status,'BLOCKED');
 });
+test('release refuses to claim production verification without observation timestamps',()=>{
+ const x=release();delete x.smokeObservedAt;
+ assert.equal(assessRelease(x).status,'DEPLOYED_UNVERIFIED');
+ delete x.deployedAt;
+ assert.equal(assessRelease(x).status,'DEPLOYED_UNVERIFIED');
+});
 test('release rejects predeployment smoke observation',()=>{
  const x=release();x.smokeObservedAt='2026-10-22T11:00:00Z';
  assert.equal(assessRelease(x).status,'BLOCKED');
