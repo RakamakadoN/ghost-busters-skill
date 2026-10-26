@@ -127,8 +127,14 @@ function declarationIn(ts, scopeNode, name) {
   const fromList = (list) => {
     for (const d of list.declarations) namesOf(ts, d.name, d, found);
   };
-  if (ts.isSourceFile(scopeNode) || ts.isBlock(scopeNode) || ts.isModuleBlock(scopeNode)) {
-    for (const st of scopeNode.statements) {
+  if (ts.isSourceFile(scopeNode) || ts.isBlock(scopeNode) || ts.isModuleBlock(scopeNode) || ts.isCaseBlock(scopeNode)) {
+    // All case clauses share ONE lexical scope (CaseBlock), not one per case.
+    // Reading only the enclosing function block would resolve a shadowed name
+    // to the wrong query and could attribute a safe limit to another table.
+    const statements = ts.isCaseBlock(scopeNode)
+      ? scopeNode.clauses.flatMap((clause) => Array.from(clause.statements))
+      : scopeNode.statements;
+    for (const st of statements) {
       if (ts.isVariableStatement(st)) fromList(st.declarationList);
       else if ((ts.isFunctionDeclaration(st) || ts.isClassDeclaration(st)) && st.name) found.push([st.name.text, st]);
       else if (ts.isImportDeclaration(st) && st.importClause) {
@@ -152,7 +158,7 @@ function declarationIn(ts, scopeNode, name) {
 }
 
 function isScopeNode(ts, n) {
-  return ts.isSourceFile(n) || ts.isBlock(n) || ts.isModuleBlock(n) || ts.isFunctionLike(n) || ts.isForStatement(n) || ts.isForOfStatement(n) || ts.isForInStatement(n) || ts.isCatchClause(n);
+  return ts.isSourceFile(n) || ts.isBlock(n) || ts.isModuleBlock(n) || ts.isCaseBlock(n) || ts.isFunctionLike(n) || ts.isForStatement(n) || ts.isForOfStatement(n) || ts.isForInStatement(n) || ts.isCatchClause(n);
 }
 
 /** The declaration node an identifier reference resolves to through lexical scopes, or null. */
@@ -206,7 +212,7 @@ function isConditionalBetween(ts, node, scope, shared = new Set()) {
     if (ts.isConditionalExpression(p) && (p.whenTrue === cur || p.whenFalse === cur)) return true;
     if (ts.isBinaryExpression(p) && p.right === cur) {
       const k = p.operatorToken.kind;
-      if (k === ts.SyntaxKind.AmpersandAmpersandToken || k === ts.SyntaxKind.BarBarToken || k === ts.SyntaxKind.QuestionQuestionToken) return true;
+      if (k === ts.SyntaxKind.AmpersandAmpersandToken || k === ts.SyntaxKind.BarBarToken || k === ts.SyntaxKind.QuestionQuestionToken || k === ts.SyntaxKind.AmpersandAmpersandEqualsToken || k === ts.SyntaxKind.BarBarEqualsToken || k === ts.SyntaxKind.QuestionQuestionEqualsToken) return true;
     }
     if (ts.isCaseClause(p) || ts.isDefaultClause(p)) return true;
     if (ts.isCatchClause(p)) return true;
@@ -229,12 +235,16 @@ function isConditionalBetween(ts, node, scope, shared = new Set()) {
 function followVariable(ts, top, sf, fromCall) {
   let p = top.parent;
   while (p && (ts.isAsExpression(p) || ts.isNonNullExpression(p) || ts.isParenthesizedExpression(p) || ts.isAwaitExpression(p))) p = p.parent;
+  // Includes =, &&=, ||=, ??= (and other assignment operators); not == or ===.
+  // A conditional assignment may rebind to a different query and must never
+  // lend methods from the new query to the original chain.
+  const isAssignment = (n) => ts.isBinaryExpression(n) && ts.isAssignmentOperator(n.operatorToken.kind) && ts.isIdentifier(n.left);
   let ident = null;
   let binding = null;
   if (p && ts.isVariableDeclaration(p) && ts.isIdentifier(p.name)) {
     ident = p.name.text;
     binding = p;
-  } else if (p && ts.isBinaryExpression(p) && p.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(p.left)) {
+  } else if (p && isAssignment(p)) {
     ident = p.left.text;
     binding = resolveBinding(ts, p.left);
     if (!binding) return { ident, calls: [], rebound: true }; // assigned to a name we cannot resolve (global, var hoisting) — unknown
@@ -249,31 +259,22 @@ function followVariable(ts, top, sf, fromCall) {
     if (ts.isIdentifier(n)) return n.text === ident && resolveBinding(ts, n) === binding;
     if (ts.isPropertyAccessExpression(n) || ts.isCallExpression(n)) return rootsIn(n.expression);
     if (ts.isParenthesizedExpression(n) || ts.isAsExpression(n) || ts.isNonNullExpression(n) || ts.isAwaitExpression(n)) return rootsIn(n.expression);
-    if (ts.isConditionalExpression(n)) return rootsIn(n.whenTrue) || rootsIn(n.whenFalse);
+    if (ts.isConditionalExpression(n)) return rootsIn(n.whenTrue) && rootsIn(n.whenFalse);
     return false;
   };
-  const containsOtherFrom = (n) => {
-    let found = false;
-    const v = (x) => {
-      if (found) return;
-      if (x !== fromCall && isTableFrom(ts, x)) {
-        found = true;
-        return;
-      }
-      ts.forEachChild(x, v);
-    };
-    v(n);
-    return found;
-  };
+  // The scanner does not perform alias/dataflow analysis. Any assignment to a
+  // different expression (another .from(), an alias, factory, or unknown value)
+  // may change query identity. Fail closed as UNKNOWN instead of claiming LIMIT.
+  const differentBinding = (rhs) => !rootsIn(rhs);
 
   const calls = [];
   let rebound = false;
   // The declaration's own initializer, when our chain is an assignment elsewhere, may hold another query.
-  if (ts.isVariableDeclaration(binding) && binding !== p && binding.initializer && !rootsIn(binding.initializer) && containsOtherFrom(binding.initializer)) rebound = true;
+  if (ts.isVariableDeclaration(binding) && binding !== p && binding.initializer && differentBinding(binding.initializer)) rebound = true;
   const shared = ancestorsUpTo(fromCall, scope);
   const visit = (n) => {
-    if (n !== p && ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(n.left) && n.left.text === ident && resolveBinding(ts, n.left) === binding) {
-      if (!rootsIn(n.right) && containsOtherFrom(n.right)) rebound = true;
+    if (n !== p && isAssignment(n) && n.left.text === ident && resolveBinding(ts, n.left) === binding) {
+      if (differentBinding(n.right)) rebound = true;
     }
     if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && rootsIn(n.expression.expression)) {
       calls.push({ name: n.expression.name.text, args: n.arguments, node: n, conditional: isConditionalBetween(ts, n, scope, shared) });
