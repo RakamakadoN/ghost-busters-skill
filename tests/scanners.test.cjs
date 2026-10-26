@@ -148,3 +148,36 @@ test('columns: text and JSON modes exit with the same code and OTHER_SCHEMA is n
   assert.equal(json.code, text.code);
   assert.match(text.out, /schema:/);
 });
+
+ 
+// ── independent Big Pickle binding challenge (RED -> GREEN) ─────────────
+
+test('unbounded: switch/case shadowing must not lend the inner limit to the outer query', () => {
+  const { json } = runJson(UNBOUNDED, [FX_UNBOUNDED, '--cap', '1000']);
+  assert.equal(at(json, 'binding-edges.ts', 6).kind, 'UNBOUNDED',
+    'outer orders chain cannot inherit customers limit inside switch');
+  assert.equal(at(json, 'binding-edges.ts', 9).kind, 'LIMIT',
+    'case-scoped customers chain retains its own limit');
+});
+
+test('unbounded: compound assignments and aliases conservatively prevent false safe bounds', () => {
+  const { json } = runJson(UNBOUNDED, [FX_UNBOUNDED, '--cap', '1000']);
+  for (const line of [17, 18, 23, 24, 29, 30, 36, 42]) {
+    assert.equal(at(json, 'binding-edges.ts', line).kind, 'UNKNOWN',
+      'potential query rebinding must not be labeled safely bounded at line ' + line);
+  }
+  assert.equal(at(json, 'binding-edges.ts', 35).kind, 'UNBOUNDED',
+    'alias source is conservatively not assumed bounded by q');
+  assert.equal(at(json, 'binding-edges.ts', 48).kind, 'LIMIT',
+    'q = q.limit(8) on the same chain must remain a supported pattern');
+});
+
+test('columns: switch shadowing must attribute missing status to customers, never orders', () => {
+  const dir = path.join('tests', 'fixtures', 'columns-switch');
+  const { json } = runJson(COLUMNS, [dir, '--types', FX_TYPES]);
+  const hard = json.filter((f) => f.kind === 'MISSING_COLUMN');
+  assert.equal(hard.length, 1, 'exactly the customers.status error should be reported');
+  assert.equal(at(json, 'switch-shadow.ts', 8).detail, 'eq: status');
+  assert.ok(!json.some((f) => f.line === 5 && f.kind === 'MISSING_COLUMN'),
+    'orders.status is valid and must not inherit customers methods');
+});
