@@ -1,5 +1,7 @@
 # Ghost Busters
 
+[![XERJ Corpus Hub Contributor](https://hub.xerj.org/contributors/RakamakadoN/badge.svg)](https://hub.xerj.org/contributors/RakamakadoN)
+
 **A debugging skill for hunting bugs that never crash.** — **v1.6.0**
 
 Originally developed for Claude Code, Ghost Busters provides a reusable investigation
