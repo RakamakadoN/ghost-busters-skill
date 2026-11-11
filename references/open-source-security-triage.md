@@ -67,6 +67,7 @@ not a bug. Historical issue closure may disprove a candidate's interpretation.
 - Verify whether the input can be supplied by someone *without* the trust
   granted to a legitimate caller.
 - Check abort, timeout, retry, close and duplicate callbacks in every state.
+- For file-based exclusivity, test two contenders against both an absent lock and a stale lock. Distinguish an atomic create from a complete atomic *publication*, and never assume read-then-unlink is an exclusive transaction.
 - Check credentials, privacy-bearing URLs, cache keys and permissions on local
   files; verify whether parent directories already restrict access.
 - For cross-user/cross-origin behavior, isolate test identities and data.
