@@ -116,7 +116,13 @@ itself: require the running version and real role, not just a PR commit.
 
 **Evidence ledger:** use [references/evidence-ledger.md](references/evidence-ledger.md)
 to separate observed incidents, reproductions, deployment proof and independent
-review, without exposing a customer's private data. For finance-specific
+review, without exposing a customer's private data. For cross-company open-source security investigations, follow
+[references/open-source-security-triage.md](references/open-source-security-triage.md)
+to separate E0 source candidates from reproducible defects, respect each
+project's threat model and coordinate private disclosure. Never treat
+an unrun test or a previously fixed CVE as a new confirmed vulnerability.
+
+For finance-specific
 invariants, see [references/finance-invariants.md](references/finance-invariants.md);
 they are optional project-specific templates, not tax or financial advice.
 
