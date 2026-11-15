@@ -34,10 +34,12 @@ function parseOptions(argv){
  return options;
 }
 function runGit(cwd,args){
- const env={...process.env,GIT_OPTIONAL_LOCKS:'0',GIT_CONFIG_NOSYSTEM:'1',
+ const env=Object.fromEntries(Object.entries(process.env).filter(([name])=>!name.startsWith('GIT_')));
+ Object.assign(env,{GIT_OPTIONAL_LOCKS:'0',GIT_CONFIG_NOSYSTEM:'1',
   GIT_CONFIG_GLOBAL:process.platform==='win32'?'NUL':'/dev/null',
-  GIT_PAGER:'cat',GIT_EXTERNAL_DIFF:'',GIT_TERMINAL_PROMPT:'0'};
- const p=spawnSync('git',['--no-optional-locks',...args],{
+  GIT_PAGER:'cat',GIT_EXTERNAL_DIFF:'',GIT_TERMINAL_PROMPT:'0'});
+ const p=spawnSync('git',['--no-optional-locks','-c','core.fsmonitor=false',
+  '-c','core.hooksPath=/dev/null','-c','diff.external=',...args],{
   cwd,env,encoding:'utf8',shell:false,timeout:5000,maxBuffer:MAX_BUFFER,
   windowsHide:true,stdio:['ignore','pipe','pipe']
  });
