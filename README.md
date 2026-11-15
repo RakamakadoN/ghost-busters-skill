@@ -43,6 +43,33 @@ ghost-busters/
 └── LICENSE                      MIT
 ```
 
+## CLUBOK-guided Ghost Busters extensions (unreleased)
+
+Seven architecture proposals were reconciled with existing taxonomy and
+evidence contracts. No existing class codes were renumbered.
+
+- [Taxonomy compatibility](references/taxonomy-crosswalk.md)
+- [Negative-path tracing](references/negative-path-tracing.md) and
+  [minimal reproducer concepts](references/reproducer-concept.md)
+- [Independent risk axes](references/risk-axes.md) and
+  [four opt-in stack lenses](references/lenses/README.md)
+- [Diff-aware TRIAGE](references/diff-aware-triage.md): bounded read-only
+  changed-path inventory with explicitly untraced caller edges
+- [Haunted House](evals/haunted-house/README.md): six source-pinned synthetic
+  bug/safe pairs. Only the row-cap pair is an automated public scanner
+  regression; the other five are not scored as detected.
+- **META-GHOST**: the synthetic smoke fails when a parser is unavailable,
+  fixture content changes or golden scanner observations disappear.
+
+~~~sh
+node references/diff-triage.cjs --repo /authorized/project --base main --json
+npm run eval:haunted
+npm test
+~~~
+
+These extensions do not run target project code, contact production or
+establish real-world accuracy. They complement existing gates.
+
 ## New in v1.6 — close three evidence gaps
 
 Three new **offline, read-only evidence gates** were introduced after real

@@ -10,6 +10,11 @@ INSTRUMENTS <probe → result> … (production read-only, timestamp UTC) | not t
 RUNTIME     <provider + runtime + database observations, sources/times> · status / NOT_RUN
 HUMAN_ALERT <detected → created → delivered → acknowledged, independent channel?> · status / NOT_RUN
 REGRESSION  <isolated RED/ GREEN + negative controls + evidence source> · status / NOT_RUN
+NEGATIVE    <source-anchored boundary + empty/timeout/partial/retry path and falsifier> / N/A
+REPRODUCER <oracle source; disposable trigger; negative control; NOT_RUN if unexecuted>
+RISK_AXES  <detectability, persistence, scope, reachability or UNKNOWN>
+SCAN_HEALTH <parser/source availability, skipped files, stale snapshots, PARTIAL if missing>
+DIFF_SCOPE <merge-base, changed files, UNKNOWN callers; N/A when no diff lead>
 TRAIL       <screen → service → RPC → table → writer → schedule>; single path: yes/no/not verified
 DIAGNOSIS   <root cause> · confidence: proven/hypothesis · what would disprove it
 TRAP        <test/script> · RED: <output before the fix>

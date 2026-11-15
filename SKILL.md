@@ -75,6 +75,39 @@ Rules that hold in every mode:
   code ≠ production claim. A report that records its limits is complete; a
   report that fills every line with guesses is not.
 
+## CLUBOK-guided investigation extensions (opt-in)
+
+Do not renumber established classes. The public protocol has **13 numbered
+classes**; PRO maintains a separate **30-code GB taxonomy**. Use the
+[semantic crosswalk](references/taxonomy-crosswalk.md) and preserve the
+original ID and version.
+
+In HUNT/RAID, examine relevant external failure boundaries using
+[negative-path tracing](references/negative-path-tracing.md): success with
+zero rows, a timeout after commit, partial processing, duplicate delivery,
+cancellation and role-specific filtering. For each candidate, provide the
+[reproducer concept](references/reproducer-concept.md) (explicit contract,
+trigger, independent oracle, falsifier, negative control, status `NOT_RUN`
+unless executed in authorized isolation).
+
+Activate [stack lenses](references/lenses/README.md) only when the source
+actually shows FastAPI/Pydantic, Supabase/Postgres, React/TypeScript or LLM
+agents. A similar-looking safe implementation is a mandatory counterexample.
+Use [risk axes](references/risk-axes.md) for detectability, persistence,
+scope and reachability; these do **not** replace severity, confidence or proof.
+Unknown impact is `UNKNOWN`, not inferred permanent damage.
+
+Use [diff-aware TRIAGE](references/diff-aware-triage.md) only to prioritize a
+symptom-specific merge-base change set. The tool does not trace callers or
+establish complete coverage. Escalate on unresolved dependencies.
+
+The [Haunted House / META-GHOST](evals/haunted-house/README.md) benchmark
+contains six synthetic pairs with source identity checks, but the existing
+public CLI automatically detects **only one** pair's row-cap signature.
+Other pairs are available for separate agent evaluation, **not** counted as
+detector passes. A missing parser, changed fixture, unknown source path or
+lost scanner observation must fail closed rather than show CLEAN.
+
 ## Evidence gates — v1.4 + v1.6 (offline, reproducible)
 
 The eight hunt phases still apply. The v1.4 four evidence gates remain;
@@ -441,6 +474,11 @@ ENVIRONMENT <expected ref / deployed ref / observed ref verified?> · role · ev
 RUNTIME     <provider + running artifact + DB read-only evidence> · CORROBORATED_CANDIDATE / MISMATCH / NOT_RUN
 HUMAN_ALERT <detected → created → delivered → acknowledged; independent channel?> · status / NOT_RUN
 REGRESSION  <isolated RED → GREEN; controls; private CI pointers> · status / NOT_RUN
+NEGATIVE    <source-anchored boundary + empty/timeout/partial/retry path and falsifier> / N/A
+REPRODUCER <oracle source; disposable trigger; negative control; NOT_RUN if unexecuted>
+RISK_AXES  <detectability, persistence, scope, reachability or UNKNOWN>
+SCAN_HEALTH <parser/source availability, skipped files, stale snapshots, PARTIAL if missing>
+DIFF_SCOPE <merge-base, changed files, UNKNOWN callers; N/A when no diff lead>
 PULSE       <execution + freshness + progress + independent signal> · status / N/A
 IMPACT      <newly eligible data + actions + unsafe count + dependencies> · status / N/A
 RELEASE     <PR → main → CI → deploy → migration → post-deploy test> · status / NOT YET
