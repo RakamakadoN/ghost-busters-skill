@@ -1,0 +1,37 @@
+name: Ghost Busters Chat-Safe package
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate manifest and source synchronization
+        run: python3 scripts/build_chat_safe.py --check
+      - name: Build Markdown-only ZIP
+        run: python3 scripts/build_chat_safe.py
+      - name: Verify ZIP contains no executable code
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('dist/ghost-busters-chat-safe.zip') as z:
+              names = z.namelist()
+              assert len(names) == 6
+              assert all(name.endswith('.md') and not name.startswith('/') and '..' not in name.split('/') for name in names)
+              assert z.testzip() is None
+          PY
+      - name: Upload Chat-Safe ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghost-busters-chat-safe
+          path: dist/ghost-busters-chat-safe.zip
+          if-no-files-found: error

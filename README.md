@@ -279,3 +279,32 @@ the portable one.
 плюс рейд, каталог тринадцати классов с реальными прецедентами, read-only
 зонды прода и обязательный формат отчёта. Проверен парным прогоном агента
 без скилла и со скиллом на реальном инциденте.
+
+## Chat-Safe distribution for Gemini/other text-only environments
+
+The full local skill keeps its Node/TypeScript scanners, offline evidence gates
+and hunter. A separate **Markdown-only** Chat-Safe distribution contains
+`SKILL.md` plus five Markdown references; there are **no scripts, binaries,
+executables, or target-project runners in the ZIP**. Chat-Safe provides a
+read-only reasoning protocol and labels all unexecuted claims as hypotheses.
+
+~~~sh
+python3 scripts/build_chat_safe.py --check
+python3 scripts/build_chat_safe.py
+~~~
+
+The CI workflow `Ghost Busters Chat-Safe package` uploads
+`ghost-busters-chat-safe.zip` as a build artifact. Extract/upload the
+Markdown-only package using the supported import workflow for your chat
+product. **Gemini Chat import compatibility has not been tested on a live
+account**; this build removes scripts but cannot override platform restrictions.
+The primary skill stays the source of truth for taxonomy names; build tests
+fail if the Chat-Safe class index drifts from the 13 canonical classes.
+See [Chat-Safe entrypoint](chat-safe/SKILL.md) and
+[example synthetic RAID report](examples/sample-raid-report.md).
+
+## Vulnerability reporting
+
+See [SECURITY.md](SECURITY.md). For potential undisclosed vulnerabilities,
+prefer GitHub private vulnerability reporting if enabled; do not publish
+sensitive reproductions in public issues.
