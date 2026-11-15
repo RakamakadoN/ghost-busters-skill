@@ -1,0 +1,120 @@
+{
+  "schemaVersion": "haunted-house-0.1",
+  "description": "Six labelled synthetic bug/safe pairs. Author-visible regression specimens, not an independent blind trial.",
+  "cases": [
+    {
+      "id": "H-01",
+      "title": "Failed JSON becomes an empty feed",
+      "mechanism": "Swallowed error",
+      "buggyVariant": "a",
+      "supportedByBundledAutomatedScanner": false,
+      "oracle": "Malformed response must yield an explicit unavailable state; not an empty successful feed.",
+      "safeControl": "A valid empty feed remains a legitimate success.",
+      "variants": {
+        "a": {
+          "file": "evals/haunted-house/fixtures/h-01/a.ts",
+          "gitBlobSha1": "72dc1f2965cdbb276992cbf102f55f3bca599fed"
+        },
+        "b": {
+          "file": "evals/haunted-house/fixtures/h-01/b.ts",
+          "gitBlobSha1": "088e8346506e4cd40876a809eed06bab2a1f618c"
+        }
+      }
+    },
+    {
+      "id": "H-02",
+      "title": "Zero-row mutation claims success",
+      "mechanism": "Silent refusal",
+      "buggyVariant": "b",
+      "supportedByBundledAutomatedScanner": false,
+      "oracle": "When one existing order must change, zero affected rows is a non-success result.",
+      "safeControl": "An explicitly permitted ensure-absent operation may succeed on zero changes.",
+      "variants": {
+        "a": {
+          "file": "evals/haunted-house/fixtures/h-02/a.ts",
+          "gitBlobSha1": "58f76006c7378ce2f21e8fcc8d5927fb60220fd0"
+        },
+        "b": {
+          "file": "evals/haunted-house/fixtures/h-02/b.ts",
+          "gitBlobSha1": "b60a7b72f2e37897d430d0a7d0cd32ea38d74b40"
+        }
+      }
+    },
+    {
+      "id": "H-03",
+      "title": "Duplicate webhook check-then-insert race",
+      "mechanism": "Non-idempotent mutation",
+      "buggyVariant": "a",
+      "supportedByBundledAutomatedScanner": false,
+      "oracle": "At-most-once business effect per provider event ID under concurrently retried delivery.",
+      "safeControl": "Two different provider IDs are both accepted.",
+      "variants": {
+        "a": {
+          "file": "evals/haunted-house/fixtures/h-03/a.py",
+          "gitBlobSha1": "0c3c1f72ab514569c1e4aa26c7376c76a81cad14"
+        },
+        "b": {
+          "file": "evals/haunted-house/fixtures/h-03/b.py",
+          "gitBlobSha1": "acd13f0c2ec493fae5d6d9d340ed871bed63909b"
+        }
+      }
+    },
+    {
+      "id": "H-04",
+      "title": "Async callbacks ignored by completion",
+      "mechanism": "Zombie async",
+      "buggyVariant": "b",
+      "supportedByBundledAutomatedScanner": false,
+      "oracle": "A completed batch must have awaited all its required writes.",
+      "safeControl": "An intentionally queued job may return accepted before durable completion if documented.",
+      "variants": {
+        "a": {
+          "file": "evals/haunted-house/fixtures/h-04/a.ts",
+          "gitBlobSha1": "59ab51ede917ff6e749790d0120e7482614231bf"
+        },
+        "b": {
+          "file": "evals/haunted-house/fixtures/h-04/b.ts",
+          "gitBlobSha1": "e4b91358f553b82d052d5a18ed8392f9c21a80c9"
+        }
+      }
+    },
+    {
+      "id": "H-05",
+      "title": "Stale client response overwrites current selection",
+      "mechanism": "React-style async race",
+      "buggyVariant": "a",
+      "supportedByBundledAutomatedScanner": false,
+      "oracle": "Only the response for the most recently selected tab may update current state.",
+      "safeControl": "An intentionally cached, timestamped older response is allowed if the contract says so.",
+      "variants": {
+        "a": {
+          "file": "evals/haunted-house/fixtures/h-05/a.ts",
+          "gitBlobSha1": "3b06e7e45470d53157893c31aaa3e8e68ee2ebcc"
+        },
+        "b": {
+          "file": "evals/haunted-house/fixtures/h-05/b.ts",
+          "gitBlobSha1": "fbbfe95f1d3440db442def7d9a302975229ba585"
+        }
+      }
+    },
+    {
+      "id": "H-06",
+      "title": "Unbounded Supabase read silently truncated",
+      "mechanism": "Row-cap truncation",
+      "buggyVariant": "b",
+      "supportedByBundledAutomatedScanner": true,
+      "oracle": "Fetch every matching row using stable ordered pagination, not one default-capped request.",
+      "safeControl": "A bounded explicit first-N preview is valid under a first-N contract.",
+      "variants": {
+        "a": {
+          "file": "evals/haunted-house/fixtures/h-06/a.ts",
+          "gitBlobSha1": "7f8dec1234b6f6eb6e8686e567481ef43001c99d"
+        },
+        "b": {
+          "file": "evals/haunted-house/fixtures/h-06/b.ts",
+          "gitBlobSha1": "2ddd7c6622d58f54b1208315e0028056d7ee21fa"
+        }
+      }
+    }
+  ]
+}

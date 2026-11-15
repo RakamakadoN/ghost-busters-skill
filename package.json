@@ -7,7 +7,9 @@
   "scripts": {
     "test": "node --test tests/*.test.cjs",
     "test:guards": "node --test tests/guardrails.test.cjs",
-    "test:hunter": "node --test tests/hunter.test.cjs"
+    "test:hunter": "node --test tests/hunter.test.cjs",
+    "eval:haunted": "node evals/haunted-house/verify.cjs --json",
+    "test:diff": "node --test tests/diff-triage.test.cjs"
   },
   "devDependencies": {
     "typescript": "^5.6.0"
