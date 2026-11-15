@@ -28,8 +28,8 @@ test('Supported scanner actually distinguishes row-cap positive/negative',()=>{
 test('META-GHOST detects lost or malformed supported scanner observations',()=>{
  const c=load().cases.find(x=>x.id==='H-06');
  assert.throws(()=>evaluateScannerResult([],c),/coverage changed/);
- assert.throws(()=>evaluateScannerResult([{file:'h-06/a.ts',kind:'RANGE',line:4},{file:'h-06/b.ts',kind:'RANGE',line:5}],c),/missed/);
- assert.throws(()=>evaluateScannerResult([{file:'h-06/a.ts',kind:'UNBOUNDED',line:4},{file:'h-06/b.ts',kind:'UNBOUNDED',line:5}],c),/negative control/);
+ assert.throws(()=>evaluateScannerResult([{file:'evals/haunted-house/fixtures/h-06/a.ts',kind:'RANGE',line:4},{file:'evals/haunted-house/fixtures/h-06/b.ts',kind:'RANGE',line:5}],c),/missed/);
+ assert.throws(()=>evaluateScannerResult([{file:'evals/haunted-house/fixtures/h-06/a.ts',kind:'UNBOUNDED',line:4},{file:'evals/haunted-house/fixtures/h-06/b.ts',kind:'UNBOUNDED',line:5}],c),/negative control/);
 });
 test('Scorer does not turn abstentions or missing cases into true negatives',()=>{
  const m=load();
